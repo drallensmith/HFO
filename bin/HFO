@@ -2,7 +2,13 @@
 # encoding: utf-8
 from __future__ import print_function
 
-import subprocess, os, time, numpy, sys
+import atexit
+import numpy
+import os
+import time
+import signal
+import subprocess
+import sys
 
 # Global list of all/essential running processes
 processes, necProcesses = [], []
@@ -11,6 +17,16 @@ processes, necProcesses = [], []
 SERVER_BIN = 'rcssserver'
 # Command to run the monitor. Edit as needed; ditto to the above re directories.
 MONITOR_BIN = 'soccerwindow2'
+
+def cleanup():
+  """Cleanup even if doing SystemExit, as with term."""
+  for p in reversed(processes):
+    p.terminate()
+    time.sleep(0.1)
+    p.kill()
+
+def term(received_signal, ignored_stack):
+  sys.exit("Signal {0!r} received; exiting".format(received_signal))
 
 def launch(cmd, name = 'Unknown', necessary = True, suppressOutput = True):
   """Launch a process.
@@ -22,8 +38,8 @@ def launch(cmd, name = 'Unknown', necessary = True, suppressOutput = True):
   """
   kwargs = {}
   if suppressOutput:
-    kwargs = {'stdout': open('/dev/null', 'w'),
-              'stderr': open('/dev/null', 'w')}
+    kwargs = {'stdout': open(os.devnull, 'w'),
+              'stderr': open(os.devnull, 'w')}
   try:
     p = subprocess.Popen(cmd.split(' '), shell = False, **kwargs)
   except (IOError, OSError):
@@ -37,7 +53,11 @@ def launch(cmd, name = 'Unknown', necessary = True, suppressOutput = True):
 def main(args):
   """Sets up the teams, launches the server and monitor, starts the trainer.
   """
-  if args.logging and not os.path.exists(args.logDir):
+  if args.logging:
+    args.hfo_logging = True
+    if not os.path.exists(args.logDir):
+      os.makedirs(args.logDir)
+  elif args.hfo_logging and not os.path.exists(args.logDir):
     os.makedirs(args.logDir)
   num_agents   = args.offenseAgents + args.defenseAgents
   binary_dir   = os.path.dirname(os.path.realpath(__file__))
@@ -61,13 +81,20 @@ def main(args):
                   'server::say_msg_size=%i ' \
                   'server::record_messages=%i' \
                   %(server_port, coach_port, olcoach_port,
-                    args.logging, args.logging, args.logging,
+                    args.logging, args.logging, args.hfo_logging,
                     args.logDir, args.logDir, args.logDir,
                     args.sync, args.fullstate, args.fullstate,
                     args.maxFramesPerTrial, args.numTrials, args.numFrames,
                     args.offenseOnBall, args.seed, args.maxUntouchedTime,
                     args.min_ball_x, args.max_ball_x, args.messageSize,
                     args.verbose)
+
+  try:
+    signal.signal(signal.SIGTERM, term)
+  except (ValueError, AttributeError):
+    print("Not able to catch sigterm")
+
+  atexit.register(cleanup)
 
   try:
     # Launch the Server
@@ -143,6 +170,8 @@ def parseArgs():
                  'incrementally allocated the following ports.')
   p.add_argument('--no-logging', dest='logging', action='store_false',
                  default=True, help='Disable rcssserver logging.')
+  p.add_argument('--hfo-logging', dest='hfo_logging', action='store_true', default=False,
+                 help="Do .hfo logging even if no other logging")
   p.add_argument('--log-dir', dest='logDir', default='log/',
                  help='Directory to store logs. Default: log/')
   p.add_argument('--record', dest='record', action='store_true',
