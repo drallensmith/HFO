@@ -2,6 +2,7 @@ from ctypes import *
 import numpy as np
 from numpy.ctypeslib import as_ctypes
 import os
+import warnings
 
 hfo_lib = cdll.LoadLibrary(os.path.join(os.path.dirname(__file__),
                                         'libhfo_c.so'))
@@ -120,6 +121,7 @@ hfo_lib.getLastActionStatus.restype = c_int
 class HFOEnvironment(object):
   def __init__(self):
     self.obj = hfo_lib.HFO_new()
+    self.feature_set = None
 
   def __del__(self):
     hfo_lib.HFO_del(self.obj)
@@ -151,6 +153,7 @@ class HFOEnvironment(object):
                             team_name.encode('utf-8'),
                             play_goalie,
                             record_dir.encode('utf-8'))
+    self.feature_set = feature_set
 
   def getStateSize(self):
     """ Returns the number of state features """
@@ -220,3 +223,113 @@ class HFOEnvironment(object):
   def actionStatusToString(self, status):
     """Returns a string representation of an action status."""
     return ACTION_STATUS_STRINGS[status]
+
+  @staticmethod
+  def _check_state_len(state, length_needed):
+    if len(state) < length_needed:
+      raise RuntimeError(
+        "State length {0:n} is too short; should be at least {1:n}".format(
+          len(state),length_needed))
+    elif len(state) > length_needed:
+      warnings.warn("State is length {0:n}, but only know how to interpret {1:n} parts".format(
+        len(state),length_needed))
+
+  def _parse_low_level_state(self, state, num_teammates, num_opponents):
+    length_needed = 58 + (9*num_teammates) + (9*num_opponents)
+    self._check_state_len(state, length_needed)
+    
+    pass
+
+  @staticmethod
+  def _check_hl_feature(feature):
+    if abs(feature) > 1:
+      return None
+    return feature
+
+  def _parse_high_level_state(self, state, num_teammates, num_opponents):
+    length_needed = 10 + (6*num_teammates) + (3*num_opponents)
+    self._check_state_len(state, length_needed)
+    state_dict = {}
+
+    state_dict['self_x_pos'] = self._check_hl_feature(state[0])
+    state_dict['self_y_pos'] = self._check_hl_feature(state[1])
+
+    state_dict['self_angle'] = self._check_hl_feature(state[2])
+    if state_dict['self_angle'] is not None:
+      state_dict['self_angle_degrees'] = state_dict['self_angle']*180
+    else:
+      state_dict['self_angle_degrees'] = None
+
+    state_dict['ball_x_pos'] = self._check_hl_feature(state[3])
+    state_dict['ball_y_pos'] = self._check_hl_feature(state[4])
+
+    state_dict['kickable'] = bool(state[5] > 0)
+
+    state_dict['goal_dist'] = self._check_hl_feature(state[6])
+    state_dict['goal_angle'] = self._check_hl_feature(state[7])
+    if state_dict['goal_angle'] is not None:
+      state_dict['goal_angle_degrees'] = state_dict['self_angle']*180
+    else:
+      state_dict['goal_angle_degrees'] = None
+
+    state_dict['goal_open_angle'] = self._check_hl_feature(state[8])
+    if state_dict['goal_open_angle'] is not None:
+      state_dict['goal_open_angle_degrees'] = (state_dict['self_angle']+1)*90
+    else:
+      state_dict['goal_open_angle_degrees'] = None
+
+    state_dict['closest_opponent_dist'] = self._check_hl_feature(state[9])
+
+    state_dict['teammates_list'] = []
+
+    if num_teammates:
+      for i in range(num_teammates):
+        teammate_dict = {}
+        teammate_dict['goal_open_angle'] = self._check_hl_feature(state[10+i])
+        if teammate_dict['goal_open_angle'] is not None:
+          teammate_dict['goal_open_angle_degrees'] = (teammate_dict['goal_open_angle']+1)*90
+        else:
+          teammate_dict['goal_open_angle_degrees'] = None
+        teammate_dict['closest_opponent_dist'] = self._check_hl_feature(state[10+num_teammates+i])
+        teammate_dict['pass_open_angle'] = self.check_hl_feature(state[10+(2*num_teammates)+i])
+        if teammate_dict['pass_open_angle'] is not None:
+          teammate_dict['pass_open_angle_degrees'] = (teammate_dict['pass_open_angle']+1)*90
+        else:
+          teammate_dict['pass_open_angle_degrees'] = None
+        teammate_dict['x_pos'] = self._check_hl_feature(state[10+(3*num_teammates)+(3*i)])
+        teammate_dict['y_pos'] = self._check_hl_feature(state[10+(3*num_teammates)+(3*i)+1])
+        if 1 <= state[10+(3*num_teammates)+(3*i)+2] <= 11:
+          teammate_dict['unum'] = state[10+(3*num_teammates)+(3*i)+2]
+        else:
+          teammate_dict['unum'] = None
+        state_dict['teammates_list'].append(teammate_dict)
+
+    state_dict['opponents_list'] = []
+
+    if num_opponents:
+      for i in range(num_opponents):
+        opponent_dict = {}
+        opponent_dict['x_pos'] = self._check_hl_feature(state[10+(6*num_teammates)+(3*i)])
+        opponent_dict['y_pos'] = self._check_hl_feature(state[10+(6*num_teammates)+(3*i)+1])
+        if 1 <= state[10+(6*num_teammates)+(3*i)+2] <= 11:
+          opponent_dict['unum'] = state[10+(6*num_teammates)+(3*i)+2]
+        else:
+          opponent_dict['unum'] = None
+        state_dict['opponents_list'].append(opponent_dict)
+
+    return state_dict
+
+  def parse_state(self, state, feature_set=None):
+    if feature_set is None:
+      feature_set = self.feature_set
+    num_teammates = self.getNumTeammates()
+    num_opponents = self.getNumOpponents()
+
+    if feature_set == hfo.LOW_LEVEL_FEATURE_SET:
+      return self._parse_low_level_state(state, num_teammates, num_opponents)
+    elif feature_set == hfo.HIGH_LEVEL_FEATURE_SET:
+      return self._parse_high_level_state(state, num_teammates, num_opponents)
+    else:
+      raise RuntimeError("Unknown feature_set {!r}".format(feature_set))
+
+    
