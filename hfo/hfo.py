@@ -359,7 +359,9 @@ class HFOEnvironment(object):
       state_dict['self_vel_magnitude'] = None
     else: # most likely 0 magnitude...
       state_dict['self_vel_magnitude'] = -1.0
+
     state_dict.update(self._analyze_angle(state[5],state[6],'self_body'))
+
     state_dict['stamina'] = state[7]
 
     goal_nums = {'goal_center': 13,
