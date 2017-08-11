@@ -281,7 +281,7 @@ def get_abs_x_y_pos(abs_angle, dist, self_x_pos, self_y_pos, warn=True, of_what=
         error_strings.append(
           "{0!s}Bad est_y_pos_real {1:n} from self_y_pos_real {2:n} (self_y_pos {3:n}), angle {4:n} ({5:n} {6:n}), dist {7:n}".format(
             start_string, est_y_pos_real, self_y_pos_real, self_y_pos, abs_angle, sin_angle, cos_angle, dist))
-      if dist < 10:
+      if (dist < 10) and of_what.startswith("Ball"):
         raise RuntimeError("\n".join(error_strings))
       else:
         if warn or (dist < 50):
