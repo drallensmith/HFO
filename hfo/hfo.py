@@ -1,4 +1,5 @@
-from ctypes import *
+"""Half Field Offense in 2D RoboCup Soccer"""
+from ctypes import cdll, Structure, c_void_p, c_int, c_char_p, c_bool, POINTER, c_float
 import math
 import os
 import sys
@@ -125,6 +126,7 @@ class HFOEnvironment(object):
   def __init__(self):
     self.obj = hfo_lib.HFO_new()
     self.feature_set = None
+    self.playing_offense = None
 
   def __del__(self):
     hfo_lib.HFO_del(self.obj)
@@ -157,6 +159,7 @@ class HFOEnvironment(object):
                             play_goalie,
                             record_dir.encode('utf-8'))
     self.feature_set = feature_set
+    self.playing_offense = team_name.endswith("left")
 
   def getStateSize(self):
     """ Returns the number of state features """
@@ -280,61 +283,104 @@ class HFOEnvironment(object):
       warnings.warn("State is length {0:n}, but only know how to interpret {1:n} parts".format(
         len(state),length_needed))
 
-  def _parse_low_level_state(self, state, num_teammates, num_opponents):
+  @staticmethod
+  def _compare_valid_angle(first_valid, second_valid,
+                           validity, sin_angle, cos_angle,
+                           what1, what2):
+    if first_valid != second_valid:
+      raise RuntimeError(
+        "{w1} validity is {valid:n} but sin/cos for {w2} are {sin:n} and {cos:n}".format(
+          w1=what1, valid=validity, w2=what2, sin=sin_angle, cos=cos_angle))
+
+  def _get_player_stats(self, state, state_dict, num_teammates, num_opponents,
+                        i, base_num, is_teammate, strict, unum_num):
+    player_dict = {}
+    player_dict.update(self._analyze_angle(state[base_num],state[base_num+1],'pos'))
+    player_dict['pos_valid'] = player_dict['pos_angle_valid']
+    if player_dict['pos_angle_valid']:
+      player_dict['proximity'] = state[base_num+2]
+    elif strict:
+      player_dict['proximity'] = None
+    elif state_dict['collides_player'] and ((num_teammates+num_opponents) == 1):
+      player_dict['proximity'] = 1.0
+    elif (not is_teammate) and state_dict['frozen'] and (num_opponents == 1):
+      player_dict['proximity'] = 1.0
+    elif self.playing_offense and is_teammate: # pessimize
+      player_dict['proximity'] = -1.0
+    else:
+      player_dict['proximity'] = None
+    player_dict.update(self._analyze_angle(state[base_num+3],state[base_num+4],'body'))
+    # doing vel_magnitude slightly later
+    player_dict.update(self._analyze_angle(state[base_num+6],state[base_num+7],'vel'))
+    player_dict['vel_valid'] = player_dict['vel_angle_valid']
+    if player_dict['vel_valid'] and not player_dict['pos_angle_valid']:
+      if is_teammate:
+        which = "Teammate (by dist {0:n})".format(i)
+      else:
+        which = "Opponent (by dist {0:n})".format(i)
+      raise RuntimeError(
+        "{0} pos sin/cos are {1:n} and {2:n} but vel sin/cos are {3:n} and {4:n}".format(
+          which, state[base_num], state[base_num+1], state[base_num+6], state[base_num+7]))
+    if player_dict['vel_valid']:
+      player_dict['vel_magnitude'] = state[base_num+5]
+    elif strict:
+      player_dict['vel_magnitude'] = None
+    elif player_dict['proximity'] == 1.0:
+      player_dict['vel_magnitude'] = -1.0
+    else:
+      player_dict['vel_magnitude'] = None
+    player_dict['unum'] = self._analyze_unum(state[unum_num],
+                                             player_dict['pos_angle_valid'])
+    return player_dict
+
+  def _parse_low_level_state(self, state, num_teammates, num_opponents, strict=False):
     length_needed = 58 + (9*num_teammates) + (9*num_opponents)
     self._check_state_len(state, length_needed)
     state_dict = {}
-    state_dict['self_pos_valid'] = bool(state[0] > 0)
-    state_dict['self_vel_valid'] = bool(state[1] > 0)
+
+    bool_nums = {'self_pos_valid': 0,
+                 'self_vel_valid': 1,
+                 'frozen': 8,
+                 'collides_ball': 9,
+                 'collides_player': 10,
+                 'collides_post': 11,
+                 'kickable': 12,
+                 'ball_pos_valid': 50,
+                 'ball_vel_valid': 54}
+    for name, num in bool_nums:
+      state_dict[name] = bool(state[num] > 0)
+
     state_dict.update(self._analyze_angle(state[2],state[3],'self_vel'))
-    if state_dict['self_vel_valid'] != state_dict['self_vel_angle_valid']:
-      raise RuntimeError(
-        "Self velocity validity is {0:n} but sin/cos for angle are {1:n} and {2:n}".format(
-          state[1],state[2],state[3]))
+    self._compare_valid_angle(state_dict['self_vel_valid'], state_dict['self_vel_angle_valid'],
+                              state[1], state[2], state[3], "Self velocity", "angle")
     if state_dict['self_vel_valid']:
       state_dict['self_vel_magnitude'] = state[4]
+    elif strict:
+      state_dict['self_vel_magnitude'] = None
     else: # most likely 0 magnitude...
       state_dict['self_vel_magnitude'] = -1.0
     state_dict.update(self._analyze_angle(state[5],state[6],'self_body'))
     state_dict['stamina'] = state[7]
-    state_dict['frozen'] = bool(state[8] > 0)
-    state_dict['collides_ball'] = bool(state[9] > 0)
-    state_dict['collides_player'] = bool(state[10] > 0)
-    state_dict['collides_post'] = bool(state[11] > 0)
-    state_dict['kickable'] = bool(state[12] > 0)
-    state_dict.update(self._analyze_angle(state[13],state[14],'goal_center'))
-    if state_dict['self_pos_valid'] != state_dict['goal_center_angle_valid']:
-       raise RuntimeError(
-         "Self position validity is {0:n} but sin/cos for goal_center_angle are {1:n} and {2:n}".format(
-           state[0],state[13],state[14]))
-    if state_dict['self_pos_valid']:
-      state_dict['goal_center_proximity'] = state[15]
-    elif state_dict['collides_post']:
-      state_dict['goal_center_proximity'] = 1.0
-    else:
-      state_dict['goal_center_proximity'] = None
-    state_dict.update(self._analyze_angle(state[16],state[17],'goal_top'))
-    if state_dict['self_pos_valid'] != state_dict['goal_top_angle_valid']:
-       raise RuntimeError(
-         "Self position validity is {0:n} but sin/cos for goal_top_angle are {1:n} and {2:n}".format(
-           state[0],state[16],state[17]))
-    if state_dict['self_pos_valid']:
-      state_dict['goal_top_proximity'] = state[18]
-    elif state_dict['collides_post']:
-      state_dict['goal_top_proximity'] = 1.0
-    else:
-      state_dict['goal_top_proximity'] = None
-    state_dict.update(self._analyze_angle(state[19],state[20],'goal_bottom'))
-    if state_dict['self_pos_valid'] != state_dict['goal_bottom_angle_valid']:
-       raise RuntimeError(
-         "Self position validity is {0:n} but sin/cos for goal_bottom_angle are {1:n} and {2:n}".format(
-           state[0],state[19],state[20]))
-    if state_dict['self_pos_valid']:
-      state_dict['goal_bottom_proximity'] = state[21]
-    elif state_dict['collides_post']:
-      state_dict['goal_bottom_proximity'] = 1.0
-    else:
-      state_dict['goal_bottom_proximity'] = None
+
+    goal_nums = {'goal_center': 13,
+                 'goal_top': 16,
+                 'goal_bottom': 19}
+
+    for name, num in goal_nums:
+      state_dict.update(self._analyze_angle(state[num], state[num+1], name))
+      self._compare_valid_angle(state_dict['self_pos_valid'], state_dict[name + '_angle_valid'],
+                                state[0], state[num], state[num+1],
+                                "Self position", name + '_angle')
+      if state_dict['self_pos_valid']:
+        state_dict[name + '_proximity'] = state[num+2]
+      elif strict:
+        state_dict[name + '_proximity'] = None
+      elif state_dict['collides_post']:
+        state_dict[name + '_proximity'] = 1.0 # approximation
+      elif self.playing_offense: # pessimize
+        state_dict[name + '_proximity'] = -1.0
+      else:
+        state_dict[name + '_proximity'] = None
 
     landmark_nums = {'penalty_box_center': 22,
                      'penalty_box_top': 25,
@@ -345,13 +391,10 @@ class HFOEnvironment(object):
                      'corner_bottom_right': 40,
                      'corner_bottom_left': 43}
     for name, num in landmark_nums:
-      state_dict.update(self._analyze_angle(state[num],
-                                            state[num+1],
-                                            name))
-      if state_dict['self_pos_valid'] != state_dict[name + '_angle_valid']:
-        raise RuntimeError(
-          "Self position validity is {0:n} but sin/cos for {1}_angle are {2:n} and {3:n}".format(
-            state[0], name, state[num], state[num+1]))
+      state_dict.update(self._analyze_angle(state[num], state[num+1], name))
+      self._compare_valid_angle(state_dict['self_pos_valid'], state_dict[name + '_angle_valid'],
+                                state[0], state[num], state[num+1],
+                                "Self position", name + '_angle')
       if state_dict['self_pos_valid']:
         state_dict[name + '_proximity'] = state[num+2]
       else:
@@ -363,7 +406,7 @@ class HFOEnvironment(object):
       state_dict['OOB_top_proximity'] = state[48]
       state_dict['OOB_bottom_proximity'] = state[49]
     else:
-      if state_dict['collides_post']:
+      if (not strict) and state_dict['collides_post']:
         state_dict['OOB_left_proximity'] = -1.0
         state_dict['OOB_right_proximity'] = 1.0
       else:
@@ -372,85 +415,60 @@ class HFOEnvironment(object):
       state_dict['OOB_top_proximity'] = None
       state_dict['OOB_bottom_proximity'] = None
 
-    state_dict['ball_pos_valid'] = bool(state[50] > 0)
     state_dict.update(self._analyze_angle(state[51],state[52],'ball_pos'))
-    if state_dict['ball_pos_valid'] != state_dict['ball_pos_angle_valid']:
-      raise RuntimeError(
-        "Ball position validity is {0:n} but sin/cos for angle are {1:n} and {2:n}".format(
-          state[50], state[51], state[52]))
+    self._compare_valid_angle(state_dict['ball_pos_valid'], state_dict['ball_pos_angle_valid'],
+                              state[50], state[51], state[52],
+                              "Ball position", "ball_pos_angle")
     if state_dict['ball_pos_valid']:
       state_dict['ball_proximity'] = state[53]
+    elif strict:
+      state_dict['ball_proximity'] = None
     elif state_dict['collides_ball'] or state_dict['kickable']:
       state_dict['ball_proximity'] = 1.0
     else: # pessimize
       state_dict['ball_proximity'] = -1.0
-    state_dict['ball_vel_valid'] = bool(state[54] > 0)
     if state_dict['ball_vel_valid']:
       state_dict['ball_vel_magnitude'] = state[55]
+    elif strict:
+      state_dict['ball_vel_magnitude'] = None
+    elif state_dict['collides_ball']:
+      state_dict['ball_vel_magnitude'] = -1.0
     else:
       state_dict['ball_vel_magnitude'] = None
     state_dict.update(self._analyze_angle(state[56],state[57],'ball_vel'))
-    if state_dict['ball_vel_valid'] != state_dict['ball_vel_angle_valid']:
-      raise RuntimeError(
-        "Ball velocity validity is {0:n} but sin/cos for vel_angle are {1:n} and {2:n}".format(
-          state[54],state[56],state[57]))
+    self._compare_valid_angle(state_dict['ball_vel_valid'], state_dict['ball_vel_angle_valid'],
+                              state[54], state[56], state[58],
+                              "Ball velocity", "ball_vel_angle")
 
     state_dict['teammates_list'] = []
 
     for i in range(num_teammates):
-      teammate_dict = {}
-      teammate_dict.update(self._analyze_angle(state[58+(8*i)],state[58+(8*i)+1],'pos'))
-      if teammate_dict['pos_angle_valid']:
-        teammate_dict['proximity'] = state[58+(8*i)+2]
-      elif state_dict['collides_player'] and ((num_teammates+num_opponents) == 1):
-        teammate_dict['proximity'] =  1.0
-      else:
-        teammate_dict['proximity'] = None
-      teammate_dict.update(self._analyze_angle(state[58+(8*i)+3],state[58+(8*i)+4],'body'))
-      # doing vel_magnitude slightly later
-      teammate_dict.update(self._analyze_angle(state[58+(8*i)+6],state[58+(8*i)+7],'vel'))
-      teammate_dict['vel_valid'] = teammate_dict['vel_angle_valid']
-      if teammate_dict['vel_valid'] and not teammate_dict['pos_angle_valid']:
-        raise RuntimeError(
-          "Teammate (by dist {0:n}) pos sin/cos are {1:n} and {2:n} but vel sin/cos are {3:n} and {4:n}".format(
-            i, state[58+(8*i)], state[58+(8*i)+1], state[58+(8*i)+6], state[58+(8*i)+7]))
-      if teammate_dict['vel_valid']:
-        teammate_dict['vel_magnitude'] = state[58+(8*i)+5]
-      else:
-        teammate_dict['vel_magnitude'] = None
-      teammate_dict['unum'] = self._analyze_unum(state[58+(8*num_teammates)+(8*num_opponents)+i],
-                                                 teammate_dict['pos_angle_valid'])
-      state_dict['teammates_list'].append(teammate_dict)
+      state_dict['teammates_list'].append(
+        self._get_player_stats(state,
+                               state_dict=state_dict,
+                               num_teammates=num_teammates,
+                               num_opponents=num_opponents,
+                               i=i,
+                               base_num=58+(8*i),
+                               is_teammate=True,
+                               strict=strict,
+                               unum_num=58+(8*num_teammates)+(8*num_opponents)+i))
+
+
 
     state_dict['opponents_list'] = []
 
     for i in range(num_opponents):
-      base_num = 58+(8*num_teammates)+i
-      opponent_dict = {}
-      opponent_dict.update(self._analyze_angle(state[base_num],state[base_num+1],'pos'))
-      if opponent_dict['pos_angle_valid']:
-        opponent_dict['proximity'] = state[base_num+2]
-      elif state_dict['collides_player'] and ((num_teammates+num_opponents) == 1):
-        opponent_dict['proximity'] = 1.0
-      elif state_dict['frozen'] and (num_opponents == 1):
-        opponent_dict['proximity'] = 1.0
-      else:
-        opponent_dict['proximity'] = None
-      opponent_dict.update(self._analyze_angle(state[base_num+3],state[base_num+4],'body'))
-      # doing vel_magnitude slightly later
-      opponent_dict.update(self._analyze_angle(state[base_num+6],state[base_num+7],'vel'))
-      opponent_dict['vel_valid'] = opponent_dict['vel_angle_valid']
-      if opponent_dict['vel_valid'] and not opponent_dict['pos_angle_valid']:
-        raise RuntimeError(
-          "Opponent (by dist {0:n}) pos sin/cos are {1:n} and {2:n} but vel sin/cos are {3:n} and {4:n}".format(
-            i, state[base_num], state[base_num+1], state[base_num+6], state[base_num+7]))
-      if opponent_dict['vel_valid']:
-        opponent_dict['vel_magnitude'] = state[base_num+5]
-      else:
-        opponent_dict['vel_magnitude'] = None
-      opponent_dict['unum'] = self._analyze_unum(state[base_num+(8*num_opponents)+num_teammates+i],
-                                                 opponent_dict['pos_angle_valid'])
-      state_dict['opponents_list'].append(opponent_dict)
+      state_dict['opponents_list'].append(
+        self._get_player_stats(state,
+                               state_dict=state_dict,
+                               num_teammates=num_teammates,
+                               num_opponents=num_opponents,
+                               i=i,
+                               base_num=58+(8*num_teammates)+(8*i),
+                               is_teammate=False,
+                               strict=strict,
+                               unum_num=58+(8*num_teammates)+(8*num_opponents)+num_teammates+i))
 
     return state_dict
 
@@ -531,14 +549,14 @@ class HFOEnvironment(object):
 
     return state_dict
 
-  def parse_state(self, state, feature_set=None):
+  def parse_state(self, state, feature_set=None, strict=False):
     if feature_set is None:
       feature_set = self.feature_set
     num_teammates = self.getNumTeammates()
     num_opponents = self.getNumOpponents()
 
     if feature_set == LOW_LEVEL_FEATURE_SET:
-      return self._parse_low_level_state(state, num_teammates, num_opponents)
+      return self._parse_low_level_state(state, num_teammates, num_opponents, strict=strict)
     elif feature_set == HIGH_LEVEL_FEATURE_SET:
       return self._parse_high_level_state(state, num_teammates, num_opponents)
     else:
