@@ -312,7 +312,7 @@ class HFOEnvironment(object):
     return player_dict
 
   def _parse_low_level_state(self, state, num_teammates, num_opponents, strict=False):
-    length_needed = 58 + (9*num_teammates) + (9*num_opponents)
+    length_needed = 59 + (9*num_teammates) + (9*num_opponents)
     self._check_state_len(state, length_needed)
     state_dict = {}
 
@@ -325,7 +325,7 @@ class HFOEnvironment(object):
                  'kickable': 12,
                  'ball_pos_valid': 50,
                  'ball_vel_valid': 54,
-                 'last_action_success_possible': (58+(9*num_teammates)+(9*num_opponents)+1)}
+                 'last_action_success_possible': (58+(9*num_teammates)+(9*num_opponents))}
     for name, num in bool_nums:
       state_dict[name] = bool(state[num] > 0)
 
@@ -418,7 +418,7 @@ class HFOEnvironment(object):
       state_dict['ball_vel_magnitude'] = None
     state_dict.update(self._analyze_angle(state[56],state[57],'ball_vel'))
     self._compare_valid_angle(state_dict['ball_vel_valid'], state_dict['ball_vel_angle_valid'],
-                              state[54], state[56], state[58],
+                              state[54], state[56], state[57],
                               "Ball velocity", "ball_vel_angle")
 
     state_dict['teammates_list'] = []
@@ -460,7 +460,7 @@ class HFOEnvironment(object):
     return feature
 
   def _parse_high_level_state(self, state, num_teammates, num_opponents):
-    length_needed = 10 + (6*num_teammates) + (3*num_opponents)
+    length_needed = 11 + (6*num_teammates) + (3*num_opponents)
     self._check_state_len(state, length_needed)
     state_dict = {}
 
@@ -529,7 +529,7 @@ class HFOEnvironment(object):
       state_dict['opponents_list'].append(opponent_dict)
 
     state_dict['last_action_success_possible'] = bool(state[10+(6*num_teammates)+
-                                                            (3*num_opponents)+1])
+                                                            (3*num_opponents)])
 
     return state_dict
 
