@@ -24,12 +24,17 @@ An enum of the possible HFO actions, including:
   [Mid-Level] Kick_To(target_x, target_y, speed)
   [Mid-Level] Move(target_x, target_y)
   [Mid-Level] Dribble(target_x, target_y)
-  [Mid-Level] Intercept(): Intercept the ball
+  [Mid-Level?] Intercept(): Intercept the ball
   [High-Level] Move(): Reposition player according to strategy
   [High-Level] Shoot(): Shoot the ball
   [High-Level] Pass(teammate_unum): Pass to teammate
   [High-Level] Dribble(): Offensive dribble
   [High-Level] Catch(): Catch the ball (Goalie Only)
+  [High-Level] Reduce_Angle_To_Goal(): Cover biggest open angle to goal, moving to between goal and opponents
+  [High-Level] Mark_Player(opponent_unum): Go between kicker and marked player
+  [High-Level] Defend_Goal(): Move along line between goalposts to cover goal
+  [High-Level?] Go_To_Ball(): Go directly to the ball
+  [High-Level] Reorient(): Pay close attention to surroundings, in particular dealing with loss of self/ball information
   NOOP(): Do Nothing
   QUIT(): Quit the game
 """
@@ -464,34 +469,35 @@ class HFOEnvironment(object):
     self._check_state_len(state, length_needed)
     state_dict = {}
 
-    state_dict['x_pos'] = self._check_hl_feature(state[0])
-    state_dict['y_pos'] = self._check_hl_feature(state[1])
+    hl_features_nums = {'x_pos': 0,
+                        'y_pos': 1,
+                        'body_angle': 2,
+                        'ball_x_pos': 3,
+                        'ball_y_pos': 4,
+                        'goal_dist': 6,
+                        'goal_angle': 7,
+                        'goal_open_angle': 8,
+                        'closest_opponent_dist': 9}
 
-    state_dict['body_angle'] = self._check_hl_feature(state[2])
+    for name, num in hl_features_nums:
+      state_dict[name] = self._check_hl_feature(state[num])
+
     if state_dict['body_angle'] is not None:
       state_dict['body_angle_degrees'] = state_dict['body_angle']*180
     else:
       state_dict['body_angle_degrees'] = None
 
-    state_dict['ball_x_pos'] = self._check_hl_feature(state[3])
-    state_dict['ball_y_pos'] = self._check_hl_feature(state[4])
-
     state_dict['kickable'] = bool(state[5] > 0)
 
-    state_dict['goal_dist'] = self._check_hl_feature(state[6])
-    state_dict['goal_angle'] = self._check_hl_feature(state[7])
     if state_dict['goal_angle'] is not None:
       state_dict['goal_angle_degrees'] = state_dict['goal_angle']*180
     else:
       state_dict['goal_angle_degrees'] = None
 
-    state_dict['goal_open_angle'] = self._check_hl_feature(state[8])
     if state_dict['goal_open_angle'] is not None:
       state_dict['goal_open_angle_degrees'] = (state_dict['goal_open_angle']+1)*90
     else:
       state_dict['goal_open_angle_degrees'] = None
-
-    state_dict['closest_opponent_dist'] = self._check_hl_feature(state[9])
 
     state_dict['teammates_list'] = []
 
