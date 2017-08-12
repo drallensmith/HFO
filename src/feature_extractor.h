@@ -1,8 +1,12 @@
+// -*-c++-*-
+
 #ifndef FEATURE_EXTRACTOR_H
 #define FEATURE_EXTRACTOR_H
 
 #include <rcsc/player/player_agent.h>
 #include <vector>
+
+class Agent;
 
 typedef std::pair<float, float> OpenAngle;
 
@@ -12,7 +16,8 @@ public:
   virtual ~FeatureExtractor();
 
   // Updated the state features stored in feature_vec
-  virtual const std::vector<float>& ExtractFeatures(const rcsc::WorldModel& wm) = 0;
+  virtual const std::vector<float>& ExtractFeatures(const rcsc::WorldModel& wm,
+						    bool last_action_status) = 0;
 
   // Record the current state
   void LogFeatures();

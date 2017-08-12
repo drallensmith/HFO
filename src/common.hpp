@@ -53,24 +53,6 @@ enum status_t
   SERVER_DOWN          // Server is not alive
 };
 
-// Action status
-enum action_status_t {
-  ACTION_STATUS_UNKNOWN = -1, // cannot tell or invalid action # in status request
-  ACTION_STATUS_BAD = 0, // definitely not OK
-  ACTION_STATUS_MAYBE = 1, // may be OK, may not
-};
-
-/**
- * Translates from boolean false (bad) or true (maybe OK) to action status
- */
-inline action_status_t BooleanToActionStatus(const bool status) {
-  if (status) {
-    return ACTION_STATUS_MAYBE;
-  } else{
-    return ACTION_STATUS_BAD;
-  }
-}
-
 // Configuration of the HFO domain including the team names and player
 // numbers for each team. This struct is populated by ParseConfig().
 struct Config {
@@ -215,22 +197,6 @@ inline std::string StatusToString(status_t status) {
       return "Unknown";
   }
 };
-
-/**
- * Returns a string representation of an action status.
- */
-inline std::string ActionStatusToString(action_status_t status) {
-  switch (status) {
-  case ACTION_STATUS_BAD:
-    return "Bad";
-  case ACTION_STATUS_MAYBE:
-    return "MaybeOK";
-  case ACTION_STATUS_UNKNOWN:
-    return "Unknown";
-  default:
-    return "Invalid";
-  }
-}
 
 /**
  * Parse a Trainer message to populate config. Returns a bool

@@ -74,13 +74,6 @@ STATUS_STRINGS = {IN_GAME: "InGame",
                   OUT_OF_TIME: "OutOfTime",
                   SERVER_DOWN: "ServerDown"}
 
-"""Possible action result statuses."""
-ACTION_STATUS_UNKNOWN, ACTION_STATUS_BAD, ACTION_STATUS_MAYBE = list(range(-1,2))
-ACTION_STATUS_MAYBE_OK = ACTION_STATUS_MAYBE # typos
-ACTION_STATUS_STRINGS = {ACTION_STATUS_UNKNOWN: "Unknown",
-                         ACTION_STATUS_BAD: "Bad",
-                         ACTION_STATUS_MAYBE: "MaybeOK"}
-
 """Possible sides."""
 RIGHT, NEUTRAL, LEFT = list(range(-1,2))
 
@@ -119,8 +112,6 @@ hfo_lib.getNumTeammates.argtypes = [c_void_p]
 hfo_lib.getNumTeammates.restype = c_int
 hfo_lib.getNumOpponents.argtypes = [c_void_p]
 hfo_lib.getNumOpponents.restype = c_int
-hfo_lib.getLastActionStatus.argtypes = [c_void_p, c_int]
-hfo_lib.getLastActionStatus.restype = c_int
 
 class HFOEnvironment(object):
   def __init__(self):
@@ -218,20 +209,7 @@ class HFOEnvironment(object):
     """ Returns the number of opponents of the agent """
     return hfo_lib.getNumOpponents(self.obj)
 
-  def getLastActionStatus(self, last_action):
-    """
-    If last_action is the last action with a recorded status,
-    returns ACTION_STATUS_MAYBE for possible success,
-    ACTION_STATUS_BAD for no possibility of success,
-    or ACTION_STATUS_UNKNOWN if unknown. If it is not the
-    last action with a recorded status, returns ACTION_STATUS_UNKNOWN.
-    """
-    return hfo_lib.getLastActionStatus(self.obj, last_action)
-
-  @staticmethod
-  def actionStatusToString(status):
-    """Returns a string representation of an action status."""
-    return ACTION_STATUS_STRINGS[status]
+# Utility functions - may move to separate file
 
   @staticmethod
   def _get_angle(sin_angle,cos_angle):
@@ -346,7 +324,8 @@ class HFOEnvironment(object):
                  'collides_post': 11,
                  'kickable': 12,
                  'ball_pos_valid': 50,
-                 'ball_vel_valid': 54}
+                 'ball_vel_valid': 54,
+                 'last_action_success_possible': (58+(9*num_teammates)+(9*num_opponents)+1)}
     for name, num in bool_nums:
       state_dict[name] = bool(state[num] > 0)
 
@@ -548,6 +527,9 @@ class HFOEnvironment(object):
       else:
         opponent_dict['unum'] = None
       state_dict['opponents_list'].append(opponent_dict)
+
+    state_dict['last_action_success_possible'] = bool(state[10+(6*num_teammates)+
+                                                            (3*num_opponents)+1])
 
     return state_dict
 

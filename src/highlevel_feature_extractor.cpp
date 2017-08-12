@@ -4,25 +4,28 @@
 
 #include "highlevel_feature_extractor.h"
 #include <rcsc/common/server_param.h>
+#include "agent.h"
 
 using namespace rcsc;
 
 HighLevelFeatureExtractor::HighLevelFeatureExtractor(int num_teammates,
                                                      int num_opponents,
                                                      bool playing_offense) :
-    FeatureExtractor(num_teammates, num_opponents, playing_offense)
+  FeatureExtractor(num_teammates, num_opponents, playing_offense)
 {
   assert(numTeammates >= 0);
   assert(numOpponents >= 0);
   numFeatures = num_basic_features + features_per_teammate * numTeammates
       + features_per_opponent * numOpponents;
+  numFeatures++; // action status
   feature_vec.resize(numFeatures);
 }
 
 HighLevelFeatureExtractor::~HighLevelFeatureExtractor() {}
 
-const std::vector<float>& HighLevelFeatureExtractor::ExtractFeatures(
-    const WorldModel& wm) {
+const std::vector<float>&
+HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
+					   bool last_action_status) {
   featIndx = 0;
   const ServerParam& SP = ServerParam::i();
   const SelfObject& self = wm.self();
@@ -35,7 +38,7 @@ const std::vector<float>& HighLevelFeatureExtractor::ExtractFeatures(
   // features about self pos
   // Allow the agent to go 10% over the playfield in any direction
   float tolerance_x = .1 * SP.pitchHalfLength();
-  float tolerance_y = .1 * SP.pitchHalfWidth();
+  float tolerance_y = .1 * SP.pitchHalfWidth(); // should this be SP.pitchWidth()?
   // Feature[0]: X-postion
   if (playingOffense) {
     addNormFeature(self_pos.x, -tolerance_x, SP.pitchHalfLength() + tolerance_x);
@@ -176,6 +179,12 @@ const std::vector<float>& HighLevelFeatureExtractor::ExtractFeatures(
     addFeature(FEAT_INVALID);
     addFeature(FEAT_INVALID);
     addFeature(FEAT_INVALID);
+  }
+
+  if (last_action_status) {
+    addFeature(FEAT_MAX);
+  } else {
+    addFeature(FEAT_MIN);
   }
 
   assert(featIndx == numFeatures);
