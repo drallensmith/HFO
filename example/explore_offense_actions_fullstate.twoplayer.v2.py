@@ -683,13 +683,6 @@ def evaluate_previous_action(hfo_env,
     action_status_observed = hfo.ACTION_STATUS_MAYBE
   elif (namespace.intent == INTENT_BALL_KICKABLE) and (not namespace.prestate_bit_list[4]) and bit_list[4]:
     action_status_observed = hfo.ACTION_STATUS_MAYBE
-  elif (namespace.intent == INTENT_GOAL_COLLISION) and (not namespace.prestate_bit_list[3]) and bit_list[3]:
-    action_status_observed = hfo.ACTION_STATUS_MAYBE
-  elif (namespace.intent == INTENT_BALL_COLLISION) and (((not namespace.prestate_bit_list[2]) and bit_list[2]) or
-                                                        ((not namespace.prestate_bit_list[4]) and bit_list[4])):
-    action_status_observed = hfo.ACTION_STATUS_MAYBE
-  elif (namespace.intent == INTENT_PLAYER_COLLISION) and (not namespace.prestate_bit_list[7]) and bit_list[7]:
-    action_status_observed = hfo.ACTION_STATUS_MAYBE
   elif (namespace.action == hfo.DASH) or (namespace.action == hfo.MOVE):
       pass # TODO
   elif namespace.action == hfo.TURN:
@@ -820,7 +813,7 @@ def evaluate_previous_action(hfo_env,
     action_status_guessed = action_status
   else:
     action_status_guessed = action_status_observed
-    if (action_status != action_status_observed) and (action_status != hfo.ACTION_STATUS_UNKNOWN):
+    if (action_status != action_status_observed) and (action_status != hfo.ACTION_STATUS_UNKNOWN) and (action_status_observed == hfo.ACTION_STATUS_MAYBE) and (namespace.prestate_bit_list[2] or namespace.prestate_bit_list[7]):
       print(
         "{0!s}: Difference between feedback ({1!s}), observed ({2!s}) action_status (prestate bit_list {3!s}, current bit list {4!s})".format(
           action_string,
@@ -831,7 +824,7 @@ def evaluate_previous_action(hfo_env,
         file=sys.stderr)
       sys.stderr.flush()
 
-  if (action_status_guessed == hfo.ACTION_STATUS_BAD) and (not namespace.checking_intent):
+  if (action_status_guessed == hfo.ACTION_STATUS_BAD) and (not namespace.checking_intent) and False:
     # unexpected lack of success
     print(
       "Unexpected lack of success for last action {0!s} (prestate bit_list {1!s}, current bit list {2!s})".format(
@@ -852,29 +845,29 @@ def evaluate_previous_action(hfo_env,
     namespace.struct_tried[pack_action_bit_list(namespace.action,namespace.prestate_bit_list)] += 1
     # further analysis...
 
-  if action_status_guessed == hfo.ACTION_STATUS_MAYBE:
+##  if action_status_guessed == hfo.ACTION_STATUS_MAYBE:
     # further analysis...
-    if namespace.prestate_bit_list[3] and (namespace.action in (hfo.KICK_TO, hfo.KICK)):
-      print("OK status from {0!s} despite goal collision in prestate (poststate: {1!s})".format(
-        action_string, bit_list[3]))
-      sys.stdout.flush()
+##    if namespace.prestate_bit_list[3] and (namespace.action in (hfo.KICK_TO, hfo.KICK)):
+##      print("OK status from {0!s} despite goal collision in prestate (poststate: {1!s})".format(
+##        action_string, bit_list[3]))
+##      sys.stdout.flush()
 
-    if namespace.prestate_bit_list[2] and (namespace.action == hfo.MOVE):
-      print("OK status from {0!s} despite ball collision in prestate (poststate: {1!s})".format(
-        action_string, bit_list[2]))
-      sys.stdout.flush()
+##    if namespace.prestate_bit_list[2]:
+##      print("OK status from {0!s} despite ball collision in prestate (poststate: {1!s})".format(
+##        action_string, bit_list[2]))
+##      sys.stdout.flush()
 
-    if namespace.prestate_bit_list[7]:
-      print("OK status from {0!s} despite player collision in prestate (poststate: {1!s})".format(
-        action_string, bit_list[2]))
-      sys.stdout.flush()
-  elif action_status_guessed == hfo.ACTION_STATUS_BAD:
-    if namespace.action in (hfo.MOVE_TO, hfo.INTERCEPT, hfo.MOVE, hfo.DRIBBLE, hfo.PASS, hfo.KICK_TO, hfo.KICK):
-      print("Bad status from {0!s}: prestate {1!s}, poststate {2!s}".format(
-        action_string,
-        "".join(map(str,map(int,namespace.prestate_bit_list))),
-        "".join(map(str,map(int,bit_list)))))
-      sys.stdout.flush()
+##    if namespace.prestate_bit_list[7]:
+##      print("OK status from {0!s} despite player collision in prestate (poststate: {1!s})".format(
+##        action_string, bit_list[2]))
+##      sys.stdout.flush()
+##  elif action_status_guessed == hfo.ACTION_STATUS_BAD:
+##    if namespace.action in (hfo.MOVE_TO, hfo.INTERCEPT, hfo.MOVE, hfo.DRIBBLE, hfo.PASS, hfo.KICK_TO, hfo.KICK):
+##      print("Bad status from {0!s}: prestate {1!s}, poststate {2!s}".format(
+##        action_string,
+##        "".join(map(str,map(int,namespace.prestate_bit_list))),
+##        "".join(map(str,map(int,bit_list)))))
+##      sys.stdout.flush()
 
 def save_action_prestate(action,
                          prestate_bit_list,
@@ -1244,24 +1237,22 @@ def do_next_action(hfo_env,
   # figure out what to do next
 
   actions_want_check = set([])
-  if (bit_list[4] and bit_list[3]):
-    actions_want_check |= set([hfo.KICK, hfo.KICK_TO])
-  elif ((not bit_list[4]) and bit_list[2]):
-    actions_want_check |= set([hfo.MOVE])
-##  if bit_list[2] or bit_list[3]:
-##    if bit_list[4]: # kickable
-##      actions_want_check |= set([hfo.KICK, hfo.KICK_TO])
-##    elif bit_list[2]:
-##      actions_want_check |= set([hfo.MOVE])
-##    if bit_list[7]: # collision w/player
-##      if bit_list[4]:
-##        actions_want_check |= set([hfo.DRIBBLE])
-##      else:
-##        actions_want_check |= set([hfo.GO_TO_BALL])
+  if bit_list[2]:
+    actions_want_check |= set([hfo.DASH, hfo.TURN, hfo.DRIBBLE_TO])
+    if bit_list[4]:
+      actions_want_check |= set([hfo.KICK_TO, hfo.DRIBBLE, hfo.PASS])
+    else:
+      actions_want_check |= set([hfo.INTERCEPT, hfo.MOVE])
+  if bit_list[7]:
+    actions_want_check |= set([hfo.DASH, hfo.TURN, hfo.MOVE_TO, hfo.DRIBBLE_TO])
+    if bit_list[4]:
+      actions_want_check |= set([hfo.KICK, hfo.KICK_TO, hfo.DRIBBLE])
+    else:
+      actions_want_check |= set([hfo.INTERCEPT, hfo.MOVE, hfo.GO_TO_BALL])
 
   if not actions_want_check:
-    poss_intent_set = set([INTENT_BALL_KICKABLE,INTENT_BALL_COLLISION,
-                           INTENT_GOAL_COLLISION])
+    poss_intent_set = set([INTENT_BALL_COLLISION,
+                           INTENT_PLAYER_COLLISION])
 
     if (not bit_list[5]) or (ball_dict['x_pos'] is None):
       poss_intent_set.discard(INTENT_BALL_KICKABLE)
