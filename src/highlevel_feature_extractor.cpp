@@ -4,7 +4,6 @@
 
 #include "highlevel_feature_extractor.h"
 #include <rcsc/common/server_param.h>
-#include "agent.h"
 
 using namespace rcsc;
 
@@ -38,7 +37,7 @@ HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
   // features about self pos
   // Allow the agent to go 10% over the playfield in any direction
   float tolerance_x = .1 * SP.pitchHalfLength();
-  float tolerance_y = .1 * SP.pitchHalfWidth(); // should this be SP.pitchWidth()?
+  float tolerance_y = .1 * SP.pitchHalfWidth();
   // Feature[0]: X-postion
   if (playingOffense) {
     addNormFeature(self_pos.x, -tolerance_x, SP.pitchHalfLength() + tolerance_x);
