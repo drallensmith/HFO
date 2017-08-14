@@ -84,7 +84,8 @@ protected:
 
   // Encodes a proximity feature which is defined by a distance as
   // well as a maximum possible distance, which acts as a
-  // normalizer. Encodes the distance as [0-far, 1-close]. Ignores
+  // normalizer. Encodes the distance as [0=far, 1=close], then
+  // normalizes to [-1=far, 1=close]. Ignores
   // distances greater than maxDist or less than 0.
   void addDistFeature(float dist, float maxDist);
 
@@ -92,6 +93,9 @@ protected:
   void addLandmarkFeatures(const rcsc::Vector2D& landmark,
                            const rcsc::Vector2D& self_pos,
                            const rcsc::AngleDeg& self_ang);
+
+  // Add the relative angle and distance to the landmark to the feature_vec
+  void addRelLandmarkFeatures(const rcsc::Vector2D& landmark);
 
   // Add features corresponding to another player.
   void addPlayerFeatures(rcsc::PlayerObject& player,

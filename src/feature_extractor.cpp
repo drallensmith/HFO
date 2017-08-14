@@ -61,14 +61,27 @@ void FeatureExtractor::addDistFeature(float dist, float maxDist) {
 void FeatureExtractor::addLandmarkFeatures(const rcsc::Vector2D& landmark,
                                            const rcsc::Vector2D& self_pos,
                                            const rcsc::AngleDeg& self_ang) {
-  if (self_pos == Vector2D::INVALIDATED) {
+  if (! self_pos.isValid()) {
     addFeature(0);
     addFeature(0);
     addFeature(0);
   } else {
+    assert(landmark.isValid());
     Vector2D vec_to_landmark = landmark - self_pos;
     addAngFeature(vec_to_landmark.th() - self_ang);
     addDistFeature(vec_to_landmark.r(), maxHFORadius);
+  }
+}
+
+// Add the relative angle and distance to the landmark to the feature_vec
+void FeatureExtractor::addRelLandmarkFeatures(const rcsc::Vector2D& landmark) {
+  if (landmark.isValid()) {
+    addAngFeature(landmark.th());
+    addDistFeature(landmark.r(), maxHFORadius);
+  } else {
+    addFeature(0);
+    addFeature(0);
+    addFeature(0);
   }
 }
 
@@ -79,7 +92,12 @@ void FeatureExtractor::addPlayerFeatures(rcsc::PlayerObject& player,
   // Angle dist to player.
   addLandmarkFeatures(player.pos(), self_pos, self_ang);
   // Player's body angle
-  addAngFeature(player.body());
+  if (player.bodyValid()) {
+    addAngFeature(player.body());
+  } else {
+    addFeature(0);
+    addFeature(0);
+  }
   if (player.velValid()) {
     // Player's speed
     addNormFeature(player.vel().r(), 0., observedPlayerSpeedMax);

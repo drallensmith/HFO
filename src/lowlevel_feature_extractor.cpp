@@ -127,7 +127,7 @@ LowLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
   // Angle and distance to the ball
   addFeature(ball.rposValid() ? FEAT_MAX : FEAT_MIN);
   if (ball.rposValid()) {
-    addLandmarkFeatures(ball.pos(), self_pos, self_ang);
+    addRelLandmarkFeatures(ball.rpos());
     // addAngFeature(ball.angleFromSelf());
     // addDistFeature(ball.distFromSelf(), maxHFORadius);
   } else {
@@ -138,7 +138,7 @@ LowLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
   // Velocity and direction of the ball
   addFeature(ball.velValid() ? FEAT_MAX : FEAT_MIN);
   if (ball.velValid()) {
-    // SeverParam lists ballSpeedMax a 2.7 which is too low
+    // SeverParam lists ballSpeedMax as 2.7 which is too low
     addNormFeature(ball.vel().r(), 0., observedBallSpeedMax);
     addAngFeature(ball.vel().th());
   } else {
