@@ -32,8 +32,10 @@ HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
   const float self_ang = self.body().radian();
   const PlayerCont& teammates = wm.teammates();
   const PlayerCont& opponents = wm.opponents();
-  float maxR = sqrtf(SP.pitchHalfLength() * SP.pitchHalfLength()
-                     + SP.pitchHalfWidth() * SP.pitchHalfWidth());
+  // This is not actually the full maximum distance (that would make both
+  // of the below SPs *1.2) but should do the job.
+  float maxDist = sqrtf(SP.pitchHalfLength() * SP.pitchHalfLength()
+			+ SP.pitchWidth() * SP.pitchWidth());
   // features about self pos
   // Allow the agent to go 10% over the playfield in any direction
   float tolerance_x = .1 * SP.pitchHalfLength();
@@ -74,7 +76,7 @@ HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
   }
   angleDistToPoint(self_pos, goalCenter, th, r);
   // Feature[6]: Goal Center Distance
-  addNormFeature(r, 0, maxR);
+  addNormFeature(r, 0, maxDist);
   // Feature[7]: Angle to goal center
   addNormFeature(th, -M_PI, M_PI);
   // Feature[8]: largest open goal angle
@@ -82,7 +84,7 @@ HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
   // Feature[9]: Dist to our closest opp
   if (numOpponents > 0) {
     calcClosestOpp(wm, self_pos, th, r);
-    addNormFeature(r, 0, maxR);
+    addNormFeature(r, 0, maxDist);
   } else {
     addFeature(FEAT_INVALID);
   }
@@ -108,7 +110,7 @@ HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
       const PlayerObject& teammate = *it;
       if (valid(teammate) && detected_teammates < numTeammates) {
         calcClosestOpp(wm, teammate.pos(), th, r);
-        addNormFeature(r, 0, maxR);
+        addNormFeature(r, 0, maxDist);
         detected_teammates++;
       }
     }
