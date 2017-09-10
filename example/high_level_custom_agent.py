@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from __future__ import print_function
+from __future__ import print_function, division
 # encoding: utf-8
 
 #MODIFIED#
@@ -29,13 +29,19 @@ def has_better_pos(dist_to_op, goal_angle, pass_angle, curr_goal_angle):
     return False
   return True
 
-def get_action(state,hfo_env,num_teammates,rand_pass):
+def add_num_times(action, main_dict, opt_dict=None):
+  main_dict[action] += 1
+  if opt_dict:
+    opt_dict[action] += 1
+  return action
+
+def get_action(state,hfo_env,num_teammates,rand_pass,num_times,num_times_no_param):
   """Decides and performs the action to be taken by the agent."""
   
   goal_dist = float(state[6])
   goal_op_angle = float(state[8])
   if can_shoot(goal_dist, goal_op_angle):
-    hfo_env.act(hfo.SHOOT)
+    hfo_env.act(add_num_times(hfo.SHOOT,num_times,num_times_no_param))
     return
   team_list = list(range(num_teammates))
   if rand_pass and (num_teammates > 1):
@@ -46,12 +52,12 @@ def get_action(state,hfo_env,num_teammates,rand_pass):
                       goal_angle = float(state[10 + i]),
                       pass_angle = float(state[10 + 2*num_teammates + i]),
                       curr_goal_angle = goal_op_angle):
-      hfo_env.act(hfo.PASS, teammate_uniform_number)
+      hfo_env.act(add_num_times(hfo.PASS,num_times), teammate_uniform_number)
       return
   # no check for can_dribble is needed; doDribble in agent.cpp includes
   # (via doPreprocess) doForceKick, which will cover this situation since
   # existKickableOpponent is based on distance.
-  hfo_env.act(hfo.DRIBBLE)
+  hfo_env.act(add_num_times(hfo.DRIBBLE,num_times,num_times_no_param))
   return
     
 
@@ -92,10 +98,14 @@ def main():
     print("Randomizing order of checking for a pass")
   if args.epsilon > 0:
     print("Using epsilon {0:n}".format(args.epsilon))
+  num_times_overall = {}
+  num_times_kickable_no_param = {}
+  for action in range(hfo.NUM_HFO_ACTIONS):
+    num_times_overall[action] = 0
+    num_times_kickable_no_param[action] = 0
   for episode in itertools.count():
     num_eps = 0
     num_had_ball = 0
-    num_move = 0
     status = hfo.IN_GAME
     while status == hfo.IN_GAME:
       state = hfo_env.getState()
@@ -108,16 +118,28 @@ def main():
             hfo_env.act(hfo.DRIBBLE)
           num_eps += 1
         else:
-          get_action(state,hfo_env,num_teammates,args.rand_pass)
+          get_action(state,hfo_env,num_teammates,args.rand_pass,
+                     num_times=num_times_overall,
+                     num_times_no_param=num_times_kickable_no_param)
         num_had_ball += 1
       else:
-        hfo_env.act(hfo.MOVE)
-        num_move += 1
+        hfo_env.act(add_num_times(hfo.MOVE,num_times_overall))
       status=hfo_env.step()
       #print(status)
 
     # Quit if the server goes down
     if status == hfo.SERVER_DOWN:
+      for action in range(hfo.NUM_HFO_ACTIONS):
+        if num_times_overall[action]:
+          print("Overall times {0!s}: {1:d}".format(hfo_env.actionToString(action),
+                                                    num_times_overall[action]))
+      total_kickable_no_param = sum(num_times_kickable_no_param)
+      for action in range(hfo.NUM_HFO_ACTIONS):
+        if num_times_kickable_no_param[action]:
+          print("Kickable times {0!s}: {1:d} ({2:n})".format(hfo_env.actionToString(action),
+                                                             num_times_kickable_no_param[action],
+                                                             (num_times_kickable_no_param[action]/
+                                                              total_kickable_no_param)))
       hfo_env.act(hfo.QUIT)
       exit()
 
@@ -125,10 +147,9 @@ def main():
     print("Episode {0:d} ended with {1:s}".format(episode,
                                                   hfo_env.statusToString(status)))
     if args.epsilon > 0:
-      print("\tNum move: {0:d}; Random action: {1:d}; Nonrandom: {2:d}".format(num_move,
-                                                                               num_eps,
-                                                                               (num_had_ball-
-                                                                                num_eps)))
+      print("\tRandom action: {1:d}; Nonrandom w/ball: {2:d}".format(num_eps,
+                                                                     (num_had_ball-
+                                                                      num_eps)))
 
 if __name__ == '__main__':
   main()
