@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
-This is a script to explore the use of two players controlled by the same script
-but two (coordinated) processes.
+This is a script to explore the use of two players controlled by the same
+script but two (coordinated) processes. It is also for looking at high vs low
+feature spaces.
 """
 from __future__ import print_function, division
 # encoding: utf-8
@@ -32,7 +33,8 @@ HALF_FIELD_FULL_WIDTH = HALF_FIELD_WIDTH * 1.2
 HALF_FIELD_LENGTH = 52.5 # x coordinate
 HALF_FIELD_FULL_LENGTH = HALF_FIELD_LENGTH * 1.2
 GOAL_WIDTH = 14.02
-MAX_RADIUS = math.sqrt(((HALF_FIELD_WIDTH/2)**2) + (HALF_FIELD_LENGTH**2)) # not actually correct, but works...
+MAX_DIST = math.sqrt((HALF_FIELD_LENGTH*HALF_FIELD_LENGTH) +
+                     (4*HALF_FIELD_WIDTH*HALF_FIELD_WIDTH))
 ERROR_TOLERANCE = math.pow(sys.float_info.epsilon,0.25)
 POS_ERROR_TOLERANCE = 0.05
 
@@ -150,14 +152,14 @@ else:
     def itervalues(d, **kw):
         return iter(d.itervalues(**kw))
 
-def get_dist_from_proximity(proximity, max_dist=MAX_RADIUS):
+def get_dist_from_proximity(proximity, max_dist=MAX_DIST):
   proximity_real = unnormalize(proximity, 0.0, 1.0)
   dist = (1 - proximity_real)*max_dist
   if (dist > (max_dist+ERROR_TOLERANCE)) or (dist <= (-1.0*ERROR_TOLERANCE)):
     warnings.warn("Proximity {0:n} gives dist {1:n} (max_dist {2:n})".format(proximity,dist,max_dist))
   return min(max_dist,max(0,dist))
 
-def get_proximity_from_dist(dist, max_dist=MAX_RADIUS):
+def get_proximity_from_dist(dist, max_dist=MAX_DIST):
   if dist > (max_dist+ERROR_TOLERANCE):
     print("Dist {0:n} is above max_dist {1:n}".format(dist, max_dist), file=sys.stderr)
     sys.stderr.flush()
@@ -191,12 +193,7 @@ def get_abs_angle(body_angle,rel_angle):
   return angle
 
 def get_angle_diff(angle1, angle2):
-  if angle1 > angle2:
-    return min((angle1 - angle2),abs(angle1 - angle2 - 360))
-  elif angle1 < angle2:
-    return min((angle2 - angle1),abs(angle2 - angle1 - 360))
-
-  return 0.0
+  return min((angle1 - angle2),abs(angle1 - angle2 - 360),abs(angle2 - angle1 - 360))
 
 def reverse_angle(angle):
   angle += 180
@@ -356,15 +353,29 @@ def filter_low_level_state(state, namespace):
     y_pos_from = {}
     y_pos_weight = {}
 
-    x_pos1_real = get_dist_from_proximity(state[46],HALF_FIELD_LENGTH)
-    x_pos2_real = HALF_FIELD_LENGTH - get_dist_from_proximity(state[47],HALF_FIELD_LENGTH)
-    x_pos_from['OOB'] = get_x_normalized((x_pos1_real+x_pos2_real)/2)
-    x_pos_weight['OOB'] = max(ERROR_TOLERANCE,(1.0-min(1.0,abs(x_pos_from['OOB']))))
+    x_pos1_real = get_dist_from_proximity(state[46],(HALF_FIELD_LENGTH*1.1))
+    x_pos2_real = HALF_FIELD_LENGTH - get_dist_from_proximity(state[47],(HALF_FIELD_LENGTH*1.1))
+    if state[46] >= 1.0:
+      x_pos_from['OOB'] = get_x_normalized(x_pos2_real)
+      x_pos_weight['OOB'] = 0.5
+    elif state[47] >= 1.0:
+      x_pos_from['OOB'] = get_x_normalized(x_pos1_real)
+      x_pos_weight['OOB'] = 0.5
+    else:
+      x_pos_from['OOB'] = get_x_normalized((x_pos1_real+x_pos2_real)/2)
+      x_pos_weight['OOB'] = 1.0
 
-    y_pos1_real = get_dist_from_proximity(state[48],HALF_FIELD_WIDTH) - (HALF_FIELD_WIDTH/2)
-    y_pos2_real = (HALF_FIELD_WIDTH/2) - get_dist_from_proximity(state[49],HALF_FIELD_WIDTH)
-    y_pos_from['OOB'] = get_y_normalized((y_pos1_real+y_pos2_real)/2)
-    y_pos_weight['OOB'] = max(ERROR_TOLERANCE,(1.0-min(1.0,abs(y_pos_from['OOB']))))
+    y_pos1_real = get_dist_from_proximity(state[48],(HALF_FIELD_WIDTH*2*1.05)) - (HALF_FIELD_WIDTH/2)
+    y_pos2_real = (HALF_FIELD_WIDTH/2) - get_dist_from_proximity(state[49],(HALF_FIELD_WIDTH*2*1.05))
+    if state[48] >= 1.0:
+      y_pos_from['OOB'] = get_y_normalized(y_pos2_real)
+      y_pos_weight['OOB'] = 0.5
+    elif state[49] >= 1.0:
+      y_pos_from['OOB'] = get_y_normalized(y_pos1_real)
+      y_pos_weight['OOB'] = 0.5
+    else:
+      y_pos_from['OOB'] = get_y_normalized((y_pos1_real+y_pos2_real)/2)
+      y_pos_weight['OOB'] = 1.0
 
     x_pos_from['OTHER'] = namespace.other_dict['self_x_pos'].value
     y_pos_from['OTHER'] = namespace.other_dict['self_y_pos'].value
@@ -373,7 +384,7 @@ def filter_low_level_state(state, namespace):
                                namespace.other_dict['x_pos'].value,
                                namespace.other_dict['y_pos'].value)
     other_proximity = get_proximity_from_dist(other_dist)
-    if other_dist < 1:
+    if other_dist <= 1:
       x_pos_weight['OTHER'] = y_pos_weight['OTHER'] = (other_proximity+1)/2
     else:
       x_pos_weight['OTHER'] = y_pos_weight['OTHER'] = 1/(other_dist**2)
@@ -467,6 +478,8 @@ def filter_low_level_state(state, namespace):
     self_dict['vel_rel_angle'] = None
     self_dict['vel_mag'] = -1
 
+  # NOTE: This is, due to prior uses of this code, the location of the closer goalpost,
+  # not the center of the goal.
   goal_dict = {}
   if (state[0] > 0) and (max(state[18],state[21]) > -1): # self position valid, goal pos possible
     if state[18] > state[21]: # top post closer
@@ -483,7 +496,7 @@ def filter_low_level_state(state, namespace):
                                                                                 goal_dict['rel_angle'])
                                                                  <= 1.0):
       raise RuntimeError("Should be in collision with goal - distance is {0:n}".format(goal_dict['dist']))
-    elif goal_dict['dist'] > (MAX_RADIUS-POS_ERROR_TOLERANCE):
+    elif goal_dict['dist'] > (MAX_DIST-POS_ERROR_TOLERANCE):
       raise RuntimeError(
         "Should not be possible to have dist {0:n} for goal (state[18] {1:n}, state[21] {2:n})".format(
           goal_dict['dist'], state[18], state[21]))
