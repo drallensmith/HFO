@@ -34,42 +34,53 @@ HALF_FIELD_LENGTH = 52.5 # x coordinate
 HALF_FIELD_FULL_LENGTH = HALF_FIELD_LENGTH * 1.2
 GOAL_WIDTH = 14.02
 MAX_DIST = math.sqrt((HALF_FIELD_LENGTH*HALF_FIELD_LENGTH) +
-                     (4*HALF_FIELD_WIDTH*HALF_FIELD_WIDTH))
+                     (4.0*HALF_FIELD_WIDTH*HALF_FIELD_WIDTH))
 ERROR_TOLERANCE = math.pow(sys.float_info.epsilon,0.25)
 POS_ERROR_TOLERANCE = 0.05
 
 MAX_REAL_X_VALID = 1.1*HALF_FIELD_LENGTH
 MIN_REAL_X_VALID = -0.1*HALF_FIELD_LENGTH
-MAX_REAL_Y_VALID = 1.1*(HALF_FIELD_WIDTH/2)
-MIN_REAL_Y_VALID = -1.1*(HALF_FIELD_WIDTH/2)
+MAX_REAL_Y_VALID = 1.1*HALF_FIELD_WIDTH
+MIN_REAL_Y_VALID = -1.1*HALF_FIELD_WIDTH
 
-def unnormalize(pos, min_val, max_val, silent=False):
+def unnormalize(pos, min_val, max_val, silent=False, allow_outside=False):
   assert max_val > min_val
-  if (not silent) and (abs(pos) > 1.0+ERROR_TOLERANCE):
-    print("Pos {0:n} fed to unnormalize (min_val {1:n}, max_val {2:n})".format(
-      pos, min_val, max_val), file=sys.stderr)
-    sys.stderr.flush()
-  pos = min(1.0,max(-1.0,pos))
-  top = (pos - -1.0)/(1 - -1.0)
+  if not allow_outside:
+    if (not silent) and (abs(pos) > 1.0+ERROR_TOLERANCE):
+      print("Pos {0:n} fed to unnormalize (min_val {1:n}, max_val {2:n})".format(
+        pos, min_val, max_val), file=sys.stderr)
+      sys.stderr.flush()
+    pos = min(1.0,max(-1.0,pos))
+  top = (pos+1.0)/2.0 # top = (pos - -1.0)/(1.0 - -1.0)
   bot = max_val - min_val
   return (top*bot) + min_val
 
-def get_y_unnormalized(y_pos, silent=False):
-  y_pos_real = unnormalize(y_pos, MIN_REAL_Y_VALID, MAX_REAL_Y_VALID, silent=silent)
-  est_y_pos = get_y_normalized(y_pos_real, silent=silent)
-  if abs(y_pos - est_y_pos) > POS_ERROR_TOLERANCE:
-    raise RuntimeError(
-      "Bad denormalization/normalization of {0:n} to {1:n}; reverse {2:n}".format(
-        y_pos, y_pos_real, est_y_pos))
+def get_y_unnormalized(y_pos, silent=False, check_reverse=True, allow_outside=False):
+  y_pos_real = unnormalize(y_pos, MIN_REAL_Y_VALID, MAX_REAL_Y_VALID, silent=silent,
+                           allow_outside=allow_outside)
+  if check_reverse:
+    if allow_outside:
+      est_y_pos = get_y_normalized_full_range(y_pos_real)
+    else:
+      est_y_pos = get_y_normalized(y_pos_real, silent=silent)
+    if abs(y_pos - est_y_pos) > POS_ERROR_TOLERANCE:
+      raise RuntimeError(
+        "Bad denormalization/normalization of {0:n} to {1:n}; reverse {2:n}".format(
+          y_pos, y_pos_real, est_y_pos))
   return y_pos_real
 
-def get_x_unnormalized(x_pos, silent=False):
-  x_pos_real = unnormalize(x_pos, MIN_REAL_X_VALID, MAX_REAL_X_VALID, silent=silent)
-  est_x_pos = get_x_normalized(x_pos_real, silent=silent)
-  if abs(x_pos - est_x_pos) > POS_ERROR_TOLERANCE:
-    raise RuntimeError(
-      "Bad denormalization/normalization of {0:n} to {1:n}; reverse {2:n}".format(
-        x_pos, x_pos_real, est_x_pos))
+def get_x_unnormalized(x_pos, silent=False, check_reverse=True, allow_outside=False):
+  x_pos_real = unnormalize(x_pos, MIN_REAL_X_VALID, MAX_REAL_X_VALID, silent=silent,
+                           allow_outside=allow_outside)
+  if check_reverse:
+    if allow_outside:
+      est_x_pos = get_x_normalized_full_range(x_pos_real)
+    else:
+      est_x_pos = get_x_normalized(x_pos_real, silent=silent)
+    if abs(x_pos - est_x_pos) > POS_ERROR_TOLERANCE:
+      raise RuntimeError(
+        "Bad denormalization/normalization of {0:n} to {1:n}; reverse {2:n}".format(
+          x_pos, x_pos_real, est_x_pos))
   return x_pos_real
 
 def normalize(pos, min_val, max_val, silent=False):
@@ -88,6 +99,13 @@ def normalize(pos, min_val, max_val, silent=False):
       sys.stderr.flush()
   return min(1.0,max(-1.0,num))
 
+def normalize_full_range(pos, min_val, max_val):
+  assert max_val > min_val
+  top = (pos - min_val)/(max_val - min_val)
+  bot = 1.0 - -1.0
+  num = (top*bot) + -1.0
+  return num
+
 def get_y_normalized(y_pos, silent=False):
   y_pos_norm = normalize(y_pos, MIN_REAL_Y_VALID, MAX_REAL_Y_VALID, silent=silent)
 ##  est_y_pos = get_y_unnormalized(y_pos_norm, silent=silent)
@@ -96,15 +114,21 @@ def get_y_normalized(y_pos, silent=False):
 ##      y_pos, y_pos_norm, est_y_pos))
   return y_pos_norm
 
+def get_y_normalized_full_range(y_pos):
+  return normalize_full_range(y_pos, MIN_REAL_Y_VALID, MAX_REAL_Y_VALID)
+
 def get_x_normalized(x_pos, silent=False):
   return normalize(x_pos, MIN_REAL_X_VALID, MAX_REAL_X_VALID, silent=silent)
+
+def get_x_normalized_full_range(x_pos):
+  return normalize_full_range(x_pos, MIN_REAL_X_VALID, MAX_REAL_X_VALID)
 
 GOAL_POS_X = get_x_normalized(HALF_FIELD_LENGTH)
 GOAL_TOP_POS_Y = get_y_normalized(-1*(GOAL_WIDTH/2))
 GOAL_BOTTOM_POS_Y = get_y_normalized(GOAL_WIDTH/2)
 
-MAX_POS_Y_BALL_SAFE = get_y_normalized(HALF_FIELD_WIDTH/2) - POS_ERROR_TOLERANCE
-MIN_POS_Y_BALL_SAFE = get_y_normalized(-0.5*HALF_FIELD_WIDTH) + POS_ERROR_TOLERANCE
+MAX_POS_Y_BALL_SAFE = get_y_normalized(HALF_FIELD_WIDTH) - POS_ERROR_TOLERANCE
+MIN_POS_Y_BALL_SAFE = get_y_normalized(-1*HALF_FIELD_WIDTH) + POS_ERROR_TOLERANCE
 MAX_POS_X_BALL_SAFE = get_x_normalized(HALF_FIELD_LENGTH) - POS_ERROR_TOLERANCE
 MIN_POS_X_BALL_SAFE = get_x_normalized(0) + POS_ERROR_TOLERANCE
 
@@ -114,10 +138,16 @@ MAX_POS_Y_OK = MAX_POS_X_OK
 MIN_POS_Y_OK = MIN_POS_X_OK
 
 def get_dist_real(ref_x, ref_y, src_x, src_y, silent=False):
-  ref_x_real = get_x_unnormalized(ref_x, silent=silent)
-  ref_y_real = get_y_unnormalized(ref_y, silent=silent)
-  src_x_real = get_x_unnormalized(src_x, silent=silent)
-  src_y_real = get_y_unnormalized(src_y, silent=silent)
+  if silent:
+    ref_x_real = get_x_unnormalized_full_range(ref_x)
+    ref_y_real = get_y_unnormalized_full_range(ref_y)
+    src_x_real = get_x_unnormalized_full_range(src_x)
+    src_y_real = get_y_unnormalized_full_range(src_y)
+  else:
+    ref_x_real = get_x_unnormalized(ref_x, silent=False)
+    ref_y_real = get_y_unnormalized(ref_y, silent=False)
+    src_x_real = get_x_unnormalized(src_x, silent=False)
+    src_y_real = get_y_unnormalized(src_y, silent=False)
 
   return math.sqrt(math.pow((ref_x_real - src_x_real),2) +
                    math.pow((ref_y_real - src_y_real),2))
@@ -152,12 +182,16 @@ else:
     def itervalues(d, **kw):
         return iter(d.itervalues(**kw))
 
+BIT_LIST_LEN = 8
+STRUCT_PACK = "BH"
+
 def get_dist_from_proximity(proximity, max_dist=MAX_DIST):
   proximity_real = unnormalize(proximity, 0.0, 1.0)
   dist = (1 - proximity_real)*max_dist
   if (dist > (max_dist+ERROR_TOLERANCE)) or (dist <= (-1.0*ERROR_TOLERANCE)):
     warnings.warn("Proximity {0:n} gives dist {1:n} (max_dist {2:n})".format(proximity,dist,max_dist))
-  return min(max_dist,max(0,dist))
+    return min(max_dist,max(0,dist))
+  return max(0,dist)
 
 def get_proximity_from_dist(dist, max_dist=MAX_DIST):
   if dist > (max_dist+ERROR_TOLERANCE):
@@ -201,19 +235,21 @@ def reverse_angle(angle):
     angle -= 360
   return angle
 
-def get_abs_x_y_pos(abs_angle, dist, self_x_pos, self_y_pos, warn=True, of_what=""):
+def get_abs_x_y_pos(abs_angle, dist, self_x_pos, self_y_pos, warn=True, of_what="", allow_outside=False):
   poss_xy_pos_real = {}
   max_deviation_xy_pos_real = {}
   total_deviation_xy_pos_real = {}
   dist_xy_pos_real = {}
-  self_x_pos_real = get_x_unnormalized(self_x_pos)
-  self_y_pos_real = get_y_unnormalized(self_y_pos)
+  self_x_pos_real = get_x_unnormalized(self_x_pos, allow_outside=True)
+  self_y_pos_real = get_y_unnormalized(self_y_pos, allow_outside=True)
 
   start_string = ""
   if of_what:
     start_string = of_what + ': '
 
   for angle in [(abs_angle-1),(abs_angle+1),abs_angle]:
+    if allow_outside and (angle != abs_angle):
+      continue
     angle_radians = math.radians(angle)
     sin_angle = math.sin(angle_radians)
     cos_angle = math.cos(angle_radians)
@@ -221,7 +257,9 @@ def get_abs_x_y_pos(abs_angle, dist, self_x_pos, self_y_pos, warn=True, of_what=
 
     est_x_pos_real = (cos_angle*dist) + self_x_pos_real
     est_y_pos_real = (sin_angle*dist) + self_y_pos_real
-    if ((MIN_REAL_X_VALID*(1-POS_ERROR_TOLERANCE))
+    if allow_outside:
+      poss_xy_pos_real[angle] = (est_x_pos_real, est_y_pos_real)
+    elif ((MIN_REAL_X_VALID*(1-POS_ERROR_TOLERANCE))
         <= est_x_pos_real <=
         (MAX_REAL_X_VALID*(1+POS_ERROR_TOLERANCE))) and ((MIN_REAL_Y_VALID*(1-POS_ERROR_TOLERANCE))
                                                          <= est_y_pos_real <=
@@ -283,7 +321,10 @@ def get_abs_x_y_pos(abs_angle, dist, self_x_pos, self_y_pos, warn=True, of_what=
     poss_angles.sort(key=lambda angle: max_deviation_xy_pos_real[angle])
     poss_angles.sort(key=lambda angle: dist_xy_pos_real[angle])
   est_x_pos_real, est_y_pos_real = poss_xy_pos_real[poss_angles[0]]
-  if warn:
+  if allow_outside:
+    est_x_pos = get_x_normalized_full_range(est_x_pos_real)
+    est_y_pos = get_y_normalized_full_range(est_y_pos_real)
+  elif warn:
     est_x_pos = get_x_normalized(est_x_pos_real)
     est_y_pos = get_y_normalized(est_y_pos_real)
   else:
@@ -291,7 +332,7 @@ def get_abs_x_y_pos(abs_angle, dist, self_x_pos, self_y_pos, warn=True, of_what=
     est_y_pos = get_y_normalized(est_y_pos_real, silent=True)
 
 
-  if warn:
+  if warn or ((not allow_outside) and (dist < 50)):
     est_dist = get_dist_real(self_x_pos, self_y_pos,
                              est_x_pos, est_y_pos)
 
@@ -315,11 +356,29 @@ def get_abs_x_y_pos(abs_angle, dist, self_x_pos, self_y_pos, warn=True, of_what=
   return (est_x_pos, est_y_pos)
 
 landmark_start_to_location = {13: (GOAL_POS_X, get_y_normalized(0.0)), # center of goal
-                              34: (get_x_normalized(0.0), get_y_normalized(-0.5*HALF_FIELD_WIDTH)), # Top Left
-                              37: (get_x_normalized(HALF_FIELD_LENGTH), get_y_normalized(-0.5*HALF_FIELD_WIDTH)), # Top Right
-                              40: (get_x_normalized(HALF_FIELD_LENGTH), get_y_normalized(HALF_FIELD_WIDTH/2)), # Bottom Right
-                              43: (get_x_normalized(0,0), get_y_normalized(HALF_FIELD_WIDTH/2))} # Bottom Left
+                              22: (get_x_normalized(HALF_FIELD_LENGTH-16.5), get_y_normalized(0.0)), # Penalty line center
+                              31: (get_x_normalized(0.0), get_y_normalized(0.0)), # center of entire field
+                              34: (get_x_normalized(0.0), get_y_normalized(-HALF_FIELD_WIDTH)), # Top Left
+                              37: (get_x_normalized(HALF_FIELD_LENGTH), get_y_normalized(-HALF_FIELD_WIDTH)), # Top Right
+                              40: (get_x_normalized(HALF_FIELD_LENGTH), get_y_normalized(HALF_FIELD_WIDTH)), # Bottom Right
+                              43: (get_x_normalized(0,0), get_y_normalized(HALF_FIELD_WIDTH))} # Bottom Left
 
+PROX_AT_THREE = get_proximity_from_dist(3.0)
+
+def get_weight_from_proximity(prox, using_angle=True):
+  dist = get_dist_from_proximity(prox)
+
+  if dist <= 3.0:
+    weight = min(1.0,((prox+1.0)/2.0))
+  else:
+    weight = (5.0+((PROX_AT_THREE+1.0)/2.0))/(5.0+((dist/3.0)**2.0))
+
+  if using_angle and (prox > (1.0-POS_ERROR_TOLERANCE)): # angle problems at short distances
+    max_weight = (1.0-prox)/POS_ERROR_TOLERANCE
+    max_weight = max(max_weight, ERROR_TOLERANCE)
+    weight = min(max_weight,min)
+
+  return weight
 
 def filter_low_level_state(state, namespace):
   bit_list = []
@@ -350,48 +409,77 @@ def filter_low_level_state(state, namespace):
 
     x_pos_from = {}
     x_pos_weight = {}
+    x_pos_from_prox = {}
     y_pos_from = {}
     y_pos_weight = {}
+    y_pos_from_prox = {}
 
-    x_pos1_real = get_dist_from_proximity(state[46],(HALF_FIELD_LENGTH*1.1))
-    x_pos2_real = HALF_FIELD_LENGTH - get_dist_from_proximity(state[47],(HALF_FIELD_LENGTH*1.1))
-    if state[46] >= 1.0:
-      x_pos_from['OOB'] = get_x_normalized(x_pos2_real)
-      x_pos_weight['OOB'] = 0.5
-    elif state[47] >= 1.0:
-      x_pos_from['OOB'] = get_x_normalized(x_pos1_real)
-      x_pos_weight['OOB'] = 0.5
-    else:
-      x_pos_from['OOB'] = get_x_normalized((x_pos1_real+x_pos2_real)/2)
-      x_pos_weight['OOB'] = 1.0
+    if min(state[46],state[47]) < 1.0:
+      x_pos1_real = get_dist_from_proximity(state[46],(HALF_FIELD_LENGTH*1.1))
+      x_pos2_real = HALF_FIELD_LENGTH - get_dist_from_proximity(state[47],(HALF_FIELD_LENGTH*1.1))
+      if state[46] >= 1.0:
+        x_pos_from['OOB'] = get_x_normalized(x_pos2_real)
+        x_pos_weight['OOB'] = max(ERROR_TOLERANCE,(1.0-abs(state[47])))
+        x_pos_from_prox['OOB'] = state[47]
+      elif state[47] >= 1.0:
+        x_pos_from['OOB'] = get_x_normalized(x_pos1_real)
+        x_pos_weight['OOB'] = max(ERROR_TOLERANCE,(1.0-abs(state[46])))
+        x_pos_from_prox['OOB'] = state[46]
+      elif abs(x_pos1_real-x_pos2_real) > POS_ERROR_TOLERANCE:
+        print("state[46] is {0:n}, state[47] is {1:n}, x_pos1_real is {2:n}, x_pos2_real is {3:n}".format(
+          state[46],state[47],x_pos1_real,x_pos2_real),file=sys.stderr)
+        sys.stderr.flush()
+      else:
+        x_pos_from['OOB'] = get_x_normalized((x_pos1_real+x_pos2_real)/2.0)
+        x_pos_weight['OOB'] = 2.0
+        x_pos_from_prox['OOB'] = max(state[46],state[47])
 
-    y_pos1_real = get_dist_from_proximity(state[48],(HALF_FIELD_WIDTH*2*1.05)) - (HALF_FIELD_WIDTH/2)
-    y_pos2_real = (HALF_FIELD_WIDTH/2) - get_dist_from_proximity(state[49],(HALF_FIELD_WIDTH*2*1.05))
-    if state[48] >= 1.0:
-      y_pos_from['OOB'] = get_y_normalized(y_pos2_real)
-      y_pos_weight['OOB'] = 0.5
-    elif state[49] >= 1.0:
-      y_pos_from['OOB'] = get_y_normalized(y_pos1_real)
-      y_pos_weight['OOB'] = 0.5
-    else:
-      y_pos_from['OOB'] = get_y_normalized((y_pos1_real+y_pos2_real)/2)
-      y_pos_weight['OOB'] = 1.0
+    if min(state[48],state[49]) < 1.0:
+      y_pos1_real = get_dist_from_proximity(state[48],max_dist=(HALF_FIELD_WIDTH*2.0*1.05)) - HALF_FIELD_WIDTH
+      y_pos2_real = HALF_FIELD_WIDTH - get_dist_from_proximity(state[49],max_dist=(HALF_FIELD_WIDTH*2.0*1.05))
+      if state[48] >= 1.0:
+        if (MIN_REAL_Y_VALID-POS_ERROR_TOLERANCE) <= y_pos2_real <= (MAX_REAL_Y_VALID+POS_ERROR_TOLERANCE):
+          y_pos_from['OOB'] = get_y_normalized(y_pos2_real)
+          y_pos_weight['OOB'] = max(ERROR_TOLERANCE,(1.0-abs(state[49])))
+          y_pos_from_prox['OOB'] = state[49]
+        else:
+          raise RuntimeError("state[48] is {0:n}, state[49] is {1:n}, y_pos2_real appears to be {2:n}".format(
+            state[48],state[49],y_pos2_real))
+      elif state[49] >= 1.0:
+        if (MIN_REAL_Y_VALID-POS_ERROR_TOLERANCE) <= y_pos1_real <= (MAX_REAL_Y_VALID+POS_ERROR_TOLERANCE):
+          y_pos_from['OOB'] = get_y_normalized(y_pos1_real)
+          y_pos_weight['OOB'] = max(ERROR_TOLERANCE,(1.0-abs(state[48])))
+          y_pos_from_prox['OOB'] = state[48]
+        else:
+          raise RuntimeError("state[48] is {0:n}, state[49] is {1:n}, y_pos1_real appears to be {2:n}".format(
+            state[48],state[49],y_pos1_real))
+      elif abs(y_pos1_real-y_pos2_real) > POS_ERROR_TOLERANCE:
+        print("state[48] is {0:n}, state[49] is {1:n}, y_pos1_real is {2:n}, y_pos2_real is {3:n}".format(
+          state[48],state[49],y_pos1_real,y_pos2_real),file=sys.stderr)
+        sys.stderr.flush()
+      else:
+        y_pos_from['OOB'] = get_y_normalized((y_pos1_real+y_pos2_real)/2.0)
+        y_pos_weight['OOB'] = 2.0
+        y_pos_from_prox['OOB'] = max(state[48],state[49])
 
-    x_pos_from['OTHER'] = namespace.other_dict['self_x_pos'].value
-    y_pos_from['OTHER'] = namespace.other_dict['self_y_pos'].value
-    other_dist = get_dist_real(x_pos_from['OTHER'],
-                               y_pos_from['OTHER'],
-                               namespace.other_dict['x_pos'].value,
-                               namespace.other_dict['y_pos'].value)
-    other_proximity = get_proximity_from_dist(other_dist)
-    if other_dist <= 1:
-      x_pos_weight['OTHER'] = y_pos_weight['OTHER'] = (other_proximity+1)/2
-    else:
-      x_pos_weight['OTHER'] = y_pos_weight['OTHER'] = 1/(other_dist**2)
-    if abs(x_pos_from['OTHER']) > (1.0-ERROR_TOLERANCE):
-      x_pos_weight['OTHER'] = min(ERROR_TOLERANCE,x_pos_weight['OTHER'])
-    if abs(y_pos_from['OTHER']) > (1.0-ERROR_TOLERANCE):
-      y_pos_weight['OTHER'] = min(ERROR_TOLERANCE,y_pos_weight['OTHER'])
+    if min(namespace.other_dict['self_x_pos'].value,
+           namespace.other_dict['self_y_pos'].value,
+           namespace.other_dict['x_pos'].value,
+           namespace.other_dict['y_pos'].value) >= -1.0:
+      x_pos_from['OTHER'] = namespace.other_dict['self_x_pos'].value
+      y_pos_from['OTHER'] = namespace.other_dict['self_y_pos'].value
+      other_dist = get_dist_real(x_pos_from['OTHER'],
+                                 y_pos_from['OTHER'],
+                                 namespace.other_dict['x_pos'].value,
+                                 namespace.other_dict['y_pos'].value)
+      other_proximity = get_proximity_from_dist(other_dist)
+      x_pos_weight['OTHER'] = y_pos_weight['OTHER'] = get_weight_from_proximity(other_proximity,
+                                                                                using_angle=False)
+      if abs(x_pos_from['OTHER']) > (1.0-ERROR_TOLERANCE):
+        x_pos_weight['OTHER'] = min(ERROR_TOLERANCE,x_pos_weight['OTHER'])
+      if abs(y_pos_from['OTHER']) > (1.0-ERROR_TOLERANCE):
+        y_pos_weight['OTHER'] = min(ERROR_TOLERANCE,y_pos_weight['OTHER'])
+      x_pos_from_prox['OTHER'] = y_pos_from_prox['OTHER'] = other_proximity
 
     if self_dict['body_angle'] is not None:
       for landmark_start, xy_location in iteritems(landmark_start_to_location):
@@ -405,18 +493,13 @@ def filter_low_level_state(state, namespace):
                                          self_x_pos=xy_location[0],
                                          self_y_pos=xy_location[1],
                                          warn=False,
+                                         allow_outside=bool(max(state[46],state[47],state[48],state[49]) >= 1.0),
                                          of_what="Rev " + str(landmark_start))
-          if x_pos is not None:
+          if (x_pos is not None) and (max(x_pos,y_pos) <= (1.0+POS_ERROR_TOLERANCE)) and (min(x_pos,y_pos) >= (-1.0-POS_ERROR_TOLERANCE)):
             x_pos_from[landmark_start] = x_pos
             y_pos_from[landmark_start] = y_pos
-            x_pos_weight[landmark_start] = y_pos_weight[landmark_start] = max(ERROR_TOLERANCE,
-                                                                              ((state[landmark_start+2]+1)/2))
-            # except extremely close can be a problem for the angle...
-            if state[landmark_start+2] > (1.0-POS_ERROR_TOLERANCE):
-              max_weight = (1.0-state[landmark_start+2])/POS_ERROR_TOLERANCE
-              max_weight = max(max_weight, ERROR_TOLERANCE)
-              x_pos_weight[landmark_start] = y_pos_weight[landmark_start] = min(x_pos_weight[landmark_start],
-                                                                                max_weight)
+            x_pos_weight[landmark_start] = y_pos_weight[landmark_start] = get_weight_from_proximity(state[landmark_start+2])
+            x_pos_from_prox[landmark_start] = y_pos_from_prox[landmark_start] = state[landmark_start+2]
 
     x_pos_total = 0.0
     x_pos_weight_total = 0.0
@@ -424,14 +507,32 @@ def filter_low_level_state(state, namespace):
       x_pos_total += pos*x_pos_weight[from_which]
       x_pos_weight_total += x_pos_weight[from_which]
     self_dict['x_pos'] = x_pos_total/x_pos_weight_total
+    noted_other = False
     for from_which, pos in iteritems(x_pos_from):
-      if ((x_pos_weight[from_which]/x_pos_weight_total)*abs(pos-self_dict['x_pos'])) > POS_ERROR_TOLERANCE:
-        print("Source {0!r} (weight {1:n}) x_pos {2:n} vs overall {3:n}".format(from_which,
-                                                                                x_pos_weight[from_which]/
-                                                                                x_pos_weight_total,
-                                                                                pos,
-                                                                                self_dict['x_pos']),
+      weight_prop = x_pos_weight[from_which]/x_pos_weight_total
+      if (((weight_prop*abs(pos-self_dict['x_pos'])) > POS_ERROR_TOLERANCE)
+          or ((weight_prop > 0.01) and ((((x_pos_from_prox[from_which]+1.0)/2.0)*abs(pos-self_dict['x_pos'])) > POS_ERROR_TOLERANCE))):
+        print("Source {0!r} (weight {1:n} prox {2:n}/{3:n}) x_pos {4:n} ({5:n}) vs overall {6:n} ({7:n})".format(from_which,
+                                                                                                                 x_pos_weight[from_which]/
+                                                                                                                 x_pos_weight_total,
+                                                                                                                 x_pos_from_prox[from_which],
+                                                                                                                 get_dist_from_proximity(x_pos_from_prox[from_which]),
+                                                                                                                 pos,
+                                                                                                                 get_x_unnormalized(pos, allow_outside=True),
+                                                                                                                 self_dict['x_pos'],
+                                                                                                                 get_x_unnormalized(self_dict['x_pos'],
+                                                                                                                                    allow_outside=True)),
               file=sys.stderr)
+        if from_which == 'OTHER':
+          noted_other = True
+        elif (not noted_other) and ('OTHER' in x_pos_from):
+          print("Other x-pos {0:n} ({1:n}; weight {2:n}, prox {3:n}/{4:n})".format(x_pos_from['OTHER'],
+                                                                                   get_x_unnormalized(x_pos_from['OTHER']),
+                                                                                   (x_pos_weight['OTHER']/x_pos_weight_total),
+                                                                                   x_pos_from_prox['OTHER'],
+                                                                                   get_dist_from_proximity(x_pos_from_prox['OTHER'])),
+                file=sys.stderr)
+          noted_other = True
         sys.stderr.flush()
     y_pos_total = 0.0
     y_pos_weight_total = 0.0
@@ -441,11 +542,12 @@ def filter_low_level_state(state, namespace):
     self_dict['y_pos'] = y_pos_total/y_pos_weight_total
     for from_which, pos in iteritems(y_pos_from):
       if ((y_pos_weight[from_which]/y_pos_weight_total)*abs(pos-self_dict['y_pos'])) > POS_ERROR_TOLERANCE:
-        print("Source {0!r} (weight {1:n}) y_pos {2:n} vs overall {3:n}".format(from_which,
-                                                                                y_pos_weight[from_which]/
-                                                                                y_pos_weight_total,
-                                                                                pos,
-                                                                                self_dict['y_pos']),
+        print("Source {0!r} (weight {1:n} prox {2:n}) y_pos {3:n} vs overall {4:n}".format(from_which,
+                                                                                           y_pos_weight[from_which]/
+                                                                                           y_pos_weight_total,
+                                                                                           y_pos_from_prox[from_which],
+                                                                                           pos,
+                                                                                           self_dict['y_pos']),
               file=sys.stderr)
         sys.stderr.flush()
 
@@ -644,7 +746,7 @@ def do_next_action(hfo_env,
     hfo_env.act(hfo.REORIENT)
     return
 
-  action = random.choice(poss_actions_set)
+  action = random.choice(list(poss_actions_set))
 
   if action in (hfo.INTERCEPT, hfo.MOVE, hfo.GO_TO_BALL):
     hfo_env.act(action)
@@ -704,13 +806,14 @@ def run_player2(conf_dir, args, namespace):
           < 1) and (abs(state2[1])
                      < 1):
         if get_dist_normalized(0.0,
-                                0.0,
-                                state2[0],
-                                state2[1]) > POS_ERROR_TOLERANCE:
+                               0.0,
+                               state2[0],
+                               state2[1]) > POS_ERROR_TOLERANCE:
           hfo_env2.act(hfo.MOVE_TO,0.0,0.0)
           did_reorient = False
         else:
           hfo_env2.act(hfo.TURN,random.uniform(-180,180))
+          did_reorient = False
       elif did_reorient and (abs(state2[0]) <= 1) and (abs(state2[1] <= 1)):
         hfo_env2.act(hfo.MOVE_TO,0.0,0.0)
         did_reorient = False
@@ -761,10 +864,11 @@ def main_explore_offense_actions():
                                             )
 
   popen_list = [sys.executable, "-x", bin_HFO,
-                "--frames-per-trial=3000", "--untouched-time=2000",
+                "--frames-per-trial=1000", "--untouched-time=500",
                 "--port={0:d}".format(args.port),
                 "--offense-agents=2", "--defense-npcs=0",
-                "--offense-npcs=0", "--trials={0:d}".format(args.trials), "--headless"]
+                "--offense-npcs=0", "--trials={0:d}".format(args.trials),
+                "--headless", "--fullstate"]
 
   if args.record:
     popen_list.append("--record")

@@ -29,8 +29,8 @@ FeatureExtractor::FeatureExtractor(int num_teammates,
   penaltyAreaWidth = SP.penaltyAreaWidth();
 
   // Maximum possible distance in in-bounds area of HFO
-  maxHFODist = sqrtf(pitchHalfLength * pitchHalfLength +
-                       pitchWidth * pitchWidth);
+  maxHFODist = sqrtf((pitchHalfLength * pitchHalfLength) +
+		     (4.0 * pitchHalfWidth * pitchHalfWidth));
 }
 
 FeatureExtractor::~FeatureExtractor() {}

@@ -34,8 +34,8 @@ HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
   const PlayerCont& opponents = wm.opponents();
   // This is not actually the full maximum distance (that would make both
   // of the below SPs *1.2) but should do the job.
-  float maxDist = sqrtf(SP.pitchHalfLength() * SP.pitchHalfLength()
-			+ SP.pitchWidth() * SP.pitchWidth());
+  float maxDist = sqrtf((SP.pitchHalfLength() * SP.pitchHalfLength())
+			+ (4.0*SP.pitchHalfWidth() * SP.pitchHalfWidth()));
   // features about self pos
   // Allow the agent to go 10% over the playfield in any direction
   float tolerance_x = .1 * SP.pitchHalfLength();
