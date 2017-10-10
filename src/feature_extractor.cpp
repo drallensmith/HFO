@@ -219,19 +219,22 @@ float FeatureExtractor::calcLargestOpenAngle(const rcsc::WorldModel &wm,
   std::vector<OpenAngle> openAngles;
   openAngles.push_back(OpenAngle(angBot,angTop));
   const PlayerCont& opps = wm.opponents();
+  if (!playingOffense) {
+    opps = wm.teammates();
+  }
   for (PlayerCont::const_iterator it=opps.begin(); it != opps.end(); ++it) {
     const PlayerObject& opp = *it;
     if (valid(opp)) {
       float oppAngle, oppDist;
       angleDistToPoint(self, opp.pos(), oppAngle, oppDist);
-      // theta = arctan (opponentWidth / opponentDist)
-      float halfWidthAngle = atan2(SP.defaultKickableArea() * 0.5, oppDist);
-      //float oppAngleBottom = oppAngle;
-      //float oppAngleTop = oppAngle;
-      float oppAngleBottom = oppAngle - halfWidthAngle;
-      float oppAngleTop = oppAngle + halfWidthAngle;
       // std::cout << "    to split? " << oppDist << " " << maxDist << std::endl;
       if (oppDist < maxDist) {
+	// theta = arctan (opponentWidth / opponentDist)
+	float halfWidthAngle = atan2(SP.defaultKickableArea() * 0.5, oppDist);
+	//float oppAngleBottom = oppAngle;
+	//float oppAngleTop = oppAngle;
+	float oppAngleBottom = oppAngle - halfWidthAngle;
+	float oppAngleTop = oppAngle + halfWidthAngle;
         splitAngles(openAngles,oppAngleBottom,oppAngleTop);
       }
     }
