@@ -28,7 +28,7 @@ import warnings
 # (see commented-out section at bottom of file),
 # as will the commented-out do_theilsen function below,
 # if wishing to use the code as-is.
-## from scipy import stats
+from scipy import stats
 
 try:
   import hfo
@@ -74,23 +74,23 @@ print("POS_ERROR_TOLERANCE is {0!r}".format(POS_ERROR_TOLERANCE))
 
 # Below - requires scipy
 
-##def do_theilsen(x_data, y_data):
-##    slope, ignored_intercept, low, high = stats.theilslopes(y_data, x_data)
-##    if math.isnan(slope):
-##        slope, ignored_intercept, ignored_rvalue, ignored_pvalue, stderr = stats.linregress(x_data, y_data)
-##        low = slope - (1.96*stderr)
-##        high = slope + (1.96*stderr)
-##    intercept_list = []
-##    intercept_low_list = []
-##    intercept_high_list = []
-##    for x_use, y_use in zip(x_data, y_data):
-##        intercept_list.append(y_use - (slope*x_use))
-##        intercept_low_list.append(y_use - (low*x_use))
-##        intercept_high_list.append(y_use - (high*x_use))
-##    intercept = stats.trim_mean(intercept_list, proportiontocut=0.25)
-##    intercept_low = stats.trim_mean(intercept_low_list, proportiontocut=0.25)
-##    intercept_high = stats.trim_mean(intercept_high_list, proportiontocut=0.25)
-##    return slope, intercept, low, high, intercept_low, intercept_high
+def do_theilsen(x_data, y_data):
+    slope, ignored_intercept, low, high = stats.theilslopes(y_data, x_data)
+    if math.isnan(slope):
+        slope, ignored_intercept, ignored_rvalue, ignored_pvalue, stderr = stats.linregress(x_data, y_data)
+        low = slope - (1.96*stderr)
+        high = slope + (1.96*stderr)
+    intercept_list = []
+    intercept_low_list = []
+    intercept_high_list = []
+    for x_use, y_use in zip(x_data, y_data):
+        intercept_list.append(y_use - (slope*x_use))
+        intercept_low_list.append(y_use - (low*x_use))
+        intercept_high_list.append(y_use - (high*x_use))
+    intercept = stats.trim_mean(intercept_list, proportiontocut=0.25)
+    intercept_low = stats.trim_mean(intercept_low_list, proportiontocut=0.25)
+    intercept_high = stats.trim_mean(intercept_high_list, proportiontocut=0.25)
+    return slope, intercept, low, high, intercept_low, intercept_high
 
 def unnormalize(pos, min_val, max_val, silent=False, allow_outside=False):
   assert max_val > min_val
@@ -1329,39 +1329,43 @@ def main_explore_states_and_actions():
   # first section is for TARGET_ONLY;
   # second section is for not (may not work right now - most recent testing used TARGET_ONLY)
 
-##  if TARGET_ONLY:
-##    print("Have {0:n} data points for targeting".format(len(namespace.data2_dict['target_x_pos'])))
-##    for pos_from in sorted(list(iterkeys(landmark_start_to_location)) + ['OTHER','OOB']):
-##      if pos_from in landmark_start_to_location:
-##        print("Landmark: {0:n}; position: {1:n}, {2:n}".format(pos_from,
-##                                                               landmark_start_to_location[pos_from][0],
-##                                                               landmark_start_to_location[pos_from][1]))
-##      for x_vs_y in ['x_pos_from_','x_pos_from_abs_','x_pos_from_dist_','y_pos_from_','y_pos_from_abs_','y_pos_from_dist_']:
-##        y_type = x_vs_y + str(pos_from)
-##        data_description = stats.describe(namespace.data2_dict[y_type])
-##        print(" Data from: {0} ({1!r})".format(y_type,data_description))
-##        if 'x_pos_from_' in y_type:
-##          x_type_list = ['target_x_pos'] + ['x_pos_from_dist_' + str(pos_from)]
-##        else:
-##          x_type_list = ['target_y_pos'] + ['y_pos_from_dist_' + str(pos_from)]
-##        for x_type in x_type_list:
-##          if x_type == y_type:
-##            continue
-##          results = stats.linregress(namespace.data2_dict[x_type],
-##                                     namespace.data2_dict[y_type])
-##          if math.pow(results[2],2.0) > 0.5:
-##            print("  ***Linregress of {0} vs {1}: {2!r}".format(x_type,y_type,results))
-##          elif (math.pow(results[2],2.0) > (2/5)) and (results[3] < 0.5):
-##            print("  !!!Linregress of {0} vs {1}: {2!r}".format(x_type,y_type,results))
-##          else:
-##            print("  Linregress of {0} vs {1}: {2!r}".format(x_type,y_type,results))
-##          if ((0.01 < math.pow(results[2],2.0) < (2/5))
-##              and (results[3] < 0.5)
-##              and (max(abs(data_description[1][0]),abs(data_description[1][1])) > 0.01)):
-##            slope1, intercept1, low, high, ilow, ihigh = do_theilsen(namespace.data2_dict[x_type],
-##                                                                     namespace.data2_dict[y_type])
-##            print("  Theilsen of {0} vs {1}: slope {2!r} ({3:n}/{4:n}), intercept {5!r} ({6:n}/{7:n})".format(
-##              x_type,y_type,slope1,low,high,intercept1,ilow,ihigh))
+  if TARGET_ONLY:
+    print("Have {0:n} data points for targeting".format(len(namespace.data2_dict['target_x_pos'])))
+    for pos_from in sorted(list(iterkeys(landmark_start_to_location)) + ['OOB']):
+      if pos_from in landmark_start_to_location:
+        print("Landmark: {0:n}; position: {1:n}, {2:n}".format(pos_from,
+                                                               landmark_start_to_location[pos_from][0],
+                                                               landmark_start_to_location[pos_from][1]))
+      for x_vs_y in ['x_pos_from_','x_pos_from_abs_','y_pos_from_','y_pos_from_abs_']:
+        y_type = x_vs_y + str(pos_from)
+        data_description = stats.describe(namespace.data2_dict[y_type])
+        print(" Data from: {0} ({1!r})".format(y_type,data_description))
+        if 'x_pos_from_' in y_type:
+          if 'abs' in y_type:
+            x_type_list = ['x_pos_from_dist_' + str(pos_from)]
+          else:
+            x_type_list = ['target_x_pos']
+        else:
+          if 'abs' in y_type:
+            x_type_list = ['y_pos_from_dist_' + str(pos_from)]
+          else:
+            x_type_list = ['target_y_pos']
+        for x_type in x_type_list:
+          if x_type == y_type:
+            continue
+          results = stats.linregress(namespace.data2_dict[x_type],
+                                     namespace.data2_dict[y_type])
+          if math.pow(results[2],2.0) > 0.5:
+            print("  ***Linregress of {0} vs {1}: {2!r}".format(x_type,y_type,results))
+          elif (math.pow(results[2],2.0) > (2/5)) and (results[3] < 0.5):
+            print("  !!!Linregress of {0} vs {1}: {2!r}".format(x_type,y_type,results))
+          else:
+            print("  Linregress of {0} vs {1}: {2!r}".format(x_type,y_type,results))
+          if (ERROR_TOLERANCE < abs(results[0]-1.0) < 0.05):
+            slope1, intercept1, low, high, ilow, ihigh = do_theilsen(namespace.data2_dict[x_type],
+                                                                     namespace.data2_dict[y_type])
+            print("  Theilsen of {0} vs {1}: slope {2!r} ({3:n}/{4:n}), intercept {5!r} ({6:n}/{7:n})".format(
+              x_type,y_type,slope1,low,high,intercept1,ilow,ihigh))
 
 ##  for landmark in sorted(iterkeys(namespace.data_dict)):
 ##    if landmark == 'OTHER':
