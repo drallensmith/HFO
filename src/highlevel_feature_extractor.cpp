@@ -38,6 +38,7 @@ HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
 			+ (4.0*SP.pitchHalfWidth() * SP.pitchHalfWidth()));
   // features about self pos
   // Allow the agent to go 10% over the playfield in any direction
+  // and still have a known location
   float tolerance_x = .1 * SP.pitchHalfLength();
   float tolerance_y = .1 * SP.pitchHalfWidth();
   // Feature[0]: X-postion
