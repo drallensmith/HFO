@@ -28,7 +28,7 @@ protected:
   const static int num_basic_features = 10;
   // Number of features for each teammate and opponent in game.
   const static int features_per_teammate = 6;
-  const static int features_per_opponent = 3;
+  const static int features_per_opponent = 5;
 };
 
 #endif // HIGHLEVEL_FEATURE_EXTRACTOR_H

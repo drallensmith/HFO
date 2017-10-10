@@ -189,6 +189,23 @@ HighLevelFeatureExtractor::ExtractFeatures(const rcsc::WorldModel& wm,
     addFeature(FEAT_MIN);
   }
 
+  // Features [10+6T+3O - 10+6T+5O]: goal open angle, pass angle of opponents (for defense)
+  int detected_opponents = 0;
+  for (PlayerCont::const_iterator it = opponents.begin(); it != opponents.end(); ++it) {
+    const PlayerObject& opponent = *it;
+    if (valid(opponent) && detected_opponents < numOpponents) {
+      addNormFeature(calcLargestGoalAngle(wm, opponent.pos()), 0, M_PI);
+      addNormFeature(std::min(M_PI,calcLargestTeammateAngle(wm, ball_pos, opponent.pos())),0,M_PI);
+      detected_opponents++;
+    }
+  }
+  // Add invalid features for any missing opponents
+  for (int i=detected_opponents; i<numOpponents; ++i) {
+    addFeature(FEAT_INVALID);
+    addFeature(FEAT_INVALID);
+  }
+
+
   assert(featIndx == numFeatures);
   // checkFeatures();
   return feature_vec;

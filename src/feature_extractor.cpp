@@ -208,7 +208,11 @@ float FeatureExtractor::calcLargestGoalAngle(const rcsc::WorldModel &wm,
   //std::cout << "starting: " << RAD_T_DEG * angTop << " " << RAD_T_DEG * angBot << std::endl;
   float res = calcLargestOpenAngle(wm, self, angTop, angBot, 99999);
   //std::cout << angTop << " " << angBot << " | " << res << std::endl;
-  return res;
+  if res > M_PI {
+    return ((2*M_PI)-res); // Behind the goal
+  } else {
+    return res;
+  }
 }
 
 float FeatureExtractor::calcLargestOpenAngle(const rcsc::WorldModel &wm,
