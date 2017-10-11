@@ -208,7 +208,7 @@ float FeatureExtractor::calcLargestGoalAngle(const rcsc::WorldModel &wm,
   //std::cout << "starting: " << RAD_T_DEG * angTop << " " << RAD_T_DEG * angBot << std::endl;
   float res = calcLargestOpenAngle(wm, self, angTop, angBot, 99999);
   //std::cout << angTop << " " << angBot << " | " << res << std::endl;
-  if res > M_PI {
+  if (res > M_PI) {
     return ((2*M_PI)-res); // Behind the goal
   } else {
     return res;
@@ -222,10 +222,10 @@ float FeatureExtractor::calcLargestOpenAngle(const rcsc::WorldModel &wm,
   const rcsc::ServerParam & SP = rcsc::ServerParam::i();
   std::vector<OpenAngle> openAngles;
   openAngles.push_back(OpenAngle(angBot,angTop));
-  const PlayerCont& opps = wm.opponents();
-  if (!playingOffense) {
-    opps = wm.teammates();
-  }
+  const PlayerCont& opps =
+    ( wm.ourSide() == LEFT
+      ? wm.opponents()
+      : wm.teammates() );
   for (PlayerCont::const_iterator it=opps.begin(); it != opps.end(); ++it) {
     const PlayerObject& opp = *it;
     if (valid(opp)) {
